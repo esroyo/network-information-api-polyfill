@@ -1,12 +1,17 @@
 # Network Information API Polyfill
 
-A polyfill for the [W3C Network Information API](https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API) that provides real-time network connection information when the native API is not available.
+A polyfill for the
+[W3C Network Information API](https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API)
+that provides real-time network connection information when the native API is
+not available.
 
 ## Features
 
 - 🚀 **Automatic Installation** - Just import and use
-- 📊 **Real-time Measurements** - Active network speed testing using Cloudflare's infrastructure
-- 🎯 **W3C Compliant** - Follows the official Network Information API specification
+- 📊 **Real-time Measurements** - Active network speed testing using
+  Cloudflare's infrastructure
+- 🎯 **W3C Compliant** - Follows the official Network Information API
+  specification
 - 🔄 **Periodic Updates** - Optional continuous monitoring of network conditions
 - 🎛️ **Configurable** - Customizable measurement parameters
 
@@ -15,13 +20,13 @@ A polyfill for the [W3C Network Information API](https://developer.mozilla.org/e
 ### Deno (JSR)
 
 ```typescript
-import "@esroyo/network-information-api-polyfill";
+import '@esroyo/network-information-api-polyfill';
 ```
 
 ### Manual Installation
 
 ```typescript
-import { installNetworkInformationPolyfill } from "@esroyo/network-information-api-polyfill/pure";
+import { installNetworkInformationPolyfill } from '@esroyo/network-information-api-polyfill/pure';
 
 // Install with default options
 installNetworkInformationPolyfill();
@@ -30,7 +35,7 @@ installNetworkInformationPolyfill();
 installNetworkInformationPolyfill({
     measurementCount: 3,
     periodicMeasurement: true,
-    measurementInterval: 30000
+    measurementInterval: 30000,
 });
 ```
 
@@ -40,22 +45,22 @@ installNetworkInformationPolyfill({
 
 ```typescript
 // Import to automatically install the polyfill
-import "@esroyo/network-information-api-polyfill";
+import '@esroyo/network-information-api-polyfill';
 
 // Now available on navigator
 console.log(navigator.connection?.effectiveType); // '4g', '3g', '2g', 'slow-2g'
-console.log(navigator.connection?.downlink);      // Downlink speed in Mbps
-console.log(navigator.connection?.rtt);           // Round-trip time in ms
+console.log(navigator.connection?.downlink); // Downlink speed in Mbps
+console.log(navigator.connection?.rtt); // Round-trip time in ms
 ```
 
 ### Manual Usage
 
 ```typescript
-import { NetworkInformationApi } from "@esroyo/network-information-api-polyfill/pure";
+import { NetworkInformationApi } from '@esroyo/network-information-api-polyfill/pure';
 
 const networkApi = new NetworkInformationApi({
     measurementCount: 3,
-    periodicMeasurement: true
+    periodicMeasurement: true,
 });
 
 // Listen for network changes
@@ -63,7 +68,7 @@ networkApi.addEventListener('change', (event) => {
     console.log('Network changed:', {
         effectiveType: event.detail.effectiveType,
         downlink: event.detail.downlink,
-        rtt: event.detail.rtt
+        rtt: event.detail.rtt,
     });
 });
 ```
@@ -75,7 +80,8 @@ networkApi.addEventListener('change', (event) => {
 - `downlink`: Downlink speed in Mbps
 - `uplink`: Uplink speed in Mbps (estimated)
 - `rtt`: Round-trip time in milliseconds
-- `effectiveType`: Connection classification (`'slow-2g'`, `'2g'`, `'3g'`, `'4g'`)
+- `effectiveType`: Connection classification (`'slow-2g'`, `'2g'`, `'3g'`,
+  `'4g'`)
 - `saveData`: Whether data saving mode is enabled
 - `type`: Connection type (always `'unknown'` in polyfill)
 
@@ -87,14 +93,14 @@ networkApi.addEventListener('change', (event) => {
 
 ```typescript
 interface NetworkInformationConfig {
-    cfOrigin?: string;                    // Cloudflare origin URL (default: 'https://speed.cloudflare.com')
-    estimatedServerTime?: number;         // Server processing time in ms (default: 10)
-    estimatedHeaderFraction?: number;     // Header size fraction (default: 0.005)
-    measurementCount?: number;            // Number of measurements (default: 2)
-    baseMeasurementSize?: number;         // Base measurement size in bytes (default: 100000)
-    measurementSizeMultiplier?: number;   // Size multiplier for subsequent tests (default: 2)
-    periodicMeasurement?: boolean;        // Enable periodic re-measurement (default: false)
-    measurementInterval?: number;         // Interval between measurements in ms (default: 30000)
+    cfOrigin?: string; // Cloudflare origin URL (default: 'https://speed.cloudflare.com')
+    estimatedServerTime?: number; // Server processing time in ms (default: 10)
+    estimatedHeaderFraction?: number; // Header size fraction (default: 0.005)
+    measurementCount?: number; // Number of measurements (default: 2)
+    baseMeasurementSize?: number; // Base measurement size in bytes (default: 100000)
+    measurementSizeMultiplier?: number; // Size multiplier for subsequent tests (default: 2)
+    periodicMeasurement?: boolean; // Enable periodic re-measurement (default: false)
+    measurementInterval?: number; // Interval between measurements in ms (default: 30000)
 }
 ```
 
@@ -102,18 +108,19 @@ interface NetworkInformationConfig {
 
 The polyfill uses Firefox DevTools throttling classifications:
 
-| Type | Downlink | Uplink | RTT | Description |
-|------|----------|--------|-----|-------------|
+| Type      | Downlink  | Uplink    | RTT   | Description          |
+| --------- | --------- | --------- | ----- | -------------------- |
 | `slow-2g` | 0.05 Mbps | 0.02 Mbps | 500ms | Very slow connection |
-| `2g` | 0.25 Mbps | 0.05 Mbps | 300ms | Slow connection |
-| `3g` | 0.75 Mbps | 0.25 Mbps | 100ms | Moderate connection |
-| `4g` | 4+ Mbps | 3+ Mbps | 20ms | Fast connection |
+| `2g`      | 0.25 Mbps | 0.05 Mbps | 300ms | Slow connection      |
+| `3g`      | 0.75 Mbps | 0.25 Mbps | 100ms | Moderate connection  |
+| `4g`      | 4+ Mbps   | 3+ Mbps   | 20ms  | Fast connection      |
 
 ## How It Works
 
 1. **Detection**: Checks if native `navigator.connection` exists
 2. **Measurement**: Performs speed tests using Cloudflare's infrastructure
-3. **Classification**: Categorizes connection based on measured speed and latency
+3. **Classification**: Categorizes connection based on measured speed and
+   latency
 4. **Monitoring**: Optionally continues measuring at specified intervals
 5. **Events**: Dispatches `change` events when network conditions change
 

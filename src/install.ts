@@ -6,23 +6,28 @@
  * @example
  * ```typescript
  * // Just import to auto-install
- * import './network-information-polyfill.js';
+ * import '@esroyo/network-information-api-polyfill';
  *
- * // Now available on navigator
+ * // For TypeScript support, also you may import the type declarations:
+ * import '@esroyo/network-information-api-polyfill/global';
+ *
+ * // Now available on navigator with proper typing
  * console.log(navigator.connection?.effectiveType);
  * ```
+ *
+ * If you need to have a type declaration:
+ * ```typescript
+ * import type { NetworkInformationApi } from '@esroyo/network-information-api-polyfill';
+ *
+ * declare global {
+ *     interface Navigator {
+ *         connection?: NetworkInformationApi;
+ *     }
+ * }
+ * ```
  */
-
 import type { NetworkInformationConfig } from './types.ts';
 import { NetworkInformationApi } from './network-information.ts';
-
-// Extend Navigator interface to include connection property
-declare global {
-    interface Navigator {
-        /** Network Information Api connection object */
-        connection?: NetworkInformationApi;
-    }
-}
 
 /**
  * Install the Network Information Api polyfill
