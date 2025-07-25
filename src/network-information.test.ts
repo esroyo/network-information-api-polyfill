@@ -1,16 +1,6 @@
-import {
-    assertEquals,
-    assertExists,
-    assertInstanceOf,
-    assertRejects,
-} from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import {
-    assertSpyCall,
-    assertSpyCalls,
-    spy,
-    stub,
-} from 'https://deno.land/std@0.208.0/testing/mock.ts';
-import { FakeTime } from 'https://deno.land/std@0.208.0/testing/time.ts';
+import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
+import { assertSpyCalls, spy, stub } from '@std/testing/mock';
+import { FakeTime } from '@std/testing/time';
 
 import { NetworkInformationApi as _NetworkInformationApi } from './network-information.ts';
 
