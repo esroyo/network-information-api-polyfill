@@ -14,6 +14,7 @@ not available.
 - 🚀 **Automatic Installation** - Just import and use
 - 📊 **Real-time Measurements** - Active network speed testing using
   Cloudflare's infrastructure
+- ⚡ **Lightweight** - Less than **3kB** compressed transfer size
 - 🎯 **W3C Compliant** - Follows the official Network Information API
   specification
 - 🔄 **Periodic Updates** - Optional continuous monitoring of network conditions
