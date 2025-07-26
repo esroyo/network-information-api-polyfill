@@ -1,4 +1,8 @@
-# Network Information API Polyfill
+# Network Information API polyfill
+
+[![JSR](https://jsr.io/badges/@esroyo/network-information-api-polyfill)](https://jsr.io/@esroyo/network-information-api-polyfill)
+[![JSR Score](https://jsr.io/badges/@esroyo/network-information-api-polyfill/score)](https://jsr.io/@esroyo/network-information-api-polyfill)
+[![codecov](https://codecov.io/gh/esroyo/network-information-api-polyfill/graph/badge.svg?token=YO7XY0TDX5)](https://codecov.io/gh/esroyo/network-information-api-polyfill)
 
 A polyfill for the
 [W3C Network Information API](https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API)
@@ -15,15 +19,32 @@ not available.
 - 🔄 **Periodic Updates** - Optional continuous monitoring of network conditions
 - 🎛️ **Configurable** - Customizable measurement parameters
 
+## Try it right now (🚀 no installation!)
+
+**Test in your browser console in 2 seconds:**
+
+```javascript
+import('https://esm.sh/jsr/@esroyo/network-information-api-polyfill').then(
+    () => {
+        // Listen for changes
+        navigator.connection?.addEventListener('change', (e) => {
+            console.log('🔄 Network changed:', e.detail);
+        });
+    },
+);
+```
+
+Open DevTools → Console → Paste → Enter → Magic! ✨
+
 ## Installation
 
-### Deno (JSR)
+### Atomatic polyfilling
 
 ```typescript
 import '@esroyo/network-information-api-polyfill';
 ```
 
-### Manual Installation
+### Manual installation
 
 ```typescript
 import { installNetworkInformationPolyfill } from '@esroyo/network-information-api-polyfill/pure';
@@ -41,7 +62,7 @@ installNetworkInformationPolyfill({
 
 ## Usage
 
-### Basic Usage (Auto-install)
+### Basic usage (auto-install)
 
 ```typescript
 // Import to automatically install the polyfill
@@ -53,7 +74,7 @@ console.log(navigator.connection?.downlink); // Downlink speed in Mbps
 console.log(navigator.connection?.rtt); // Round-trip time in ms
 ```
 
-### Manual Usage
+### Manual usage
 
 ```typescript
 import { NetworkInformationApi } from '@esroyo/network-information-api-polyfill/pure';
@@ -73,7 +94,7 @@ networkApi.addEventListener('change', (event) => {
 });
 ```
 
-## API Reference
+## API reference
 
 ### Properties
 
@@ -89,7 +110,7 @@ networkApi.addEventListener('change', (event) => {
 
 - `change`: Fired when network conditions change
 
-### Configuration Options
+### Configuration options
 
 ```typescript
 interface NetworkInformationConfig {
@@ -104,7 +125,7 @@ interface NetworkInformationConfig {
 }
 ```
 
-## Connection Classifications
+## Connection classifications
 
 The polyfill uses Firefox DevTools throttling classifications:
 
@@ -115,7 +136,7 @@ The polyfill uses Firefox DevTools throttling classifications:
 | `3g`      | 0.75 Mbps | 0.25 Mbps | 100ms | Moderate connection  |
 | `4g`      | 4+ Mbps   | 3+ Mbps   | 20ms  | Fast connection      |
 
-## How It Works
+## How It works
 
 1. **Detection**: Checks if native `navigator.connection` exists
 2. **Measurement**: Performs speed tests using Cloudflare's infrastructure
@@ -124,7 +145,7 @@ The polyfill uses Firefox DevTools throttling classifications:
 4. **Monitoring**: Optionally continues measuring at specified intervals
 5. **Events**: Dispatches `change` events when network conditions change
 
-## Browser Compatibility
+## Browser compatibility
 
 - ✅ Modern browsers with fetch API support
 - ⚠️ Requires HTTPS for accurate measurements in browsers
