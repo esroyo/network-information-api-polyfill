@@ -1,3 +1,6 @@
+/** Possible effective connection types */
+export type EffectiveConnectionType = 'slow-2g' | '2g' | '3g' | '4g';
+
 /** Network type definition with connection characteristics */
 export interface NetworkType {
     /** Downlink speed in Mbps */
@@ -7,7 +10,7 @@ export interface NetworkType {
     /** Round-trip time in milliseconds */
     rtt: number;
     /** Effective connection type classification */
-    effectiveType: string;
+    effectiveType: EffectiveConnectionType;
 }
 
 /** Individual network measurement result */
@@ -55,7 +58,7 @@ export interface ConnectionInfo {
     /** Round-trip time in milliseconds */
     rtt?: number;
     /** Effective connection type */
-    effectiveType?: string;
+    effectiveType?: EffectiveConnectionType;
     /** Whether data saving mode is enabled */
     saveData: boolean;
     /** Connection type */
@@ -71,13 +74,10 @@ export interface NetworkChangeEventDetail {
     /** Round-trip time in milliseconds */
     rtt?: number;
     /** Effective connection type */
-    effectiveType?: string;
+    effectiveType?: EffectiveConnectionType;
     /** Whether this is a preliminary result */
     preliminary?: boolean;
 }
-
-/** Possible effective connection types */
-export type EffectiveConnectionType = 'slow-2g' | '2g' | '3g' | '4g';
 
 export interface PerformanceResourceTiming extends PerformanceEntry {
     initiatorType: string;
