@@ -168,7 +168,7 @@ export class NetworkInformationApi extends EventTarget {
         try {
             const measurements = await this._measureNetworkSpeed();
             this._updateFromMeasurements(measurements);
-        } catch (error) {
+        } catch {
             // Silent failure
         } finally {
             this._measuring = false;
@@ -208,7 +208,11 @@ export class NetworkInformationApi extends EventTarget {
                 const downloadDuration = downloadEndTime - downloadStartTime;
 
                 await new Promise((resolve) => setTimeout(resolve, 50));
-                const latencyTiming = this._buildTiming(latencyRes);
+                const latencyTiming = this._buildTiming(
+                    latencyRes,
+                    latencyStartTime,
+                    latencyEndTime,
+                );
 
                 const serverTime =
                     this._getServerTimeFromResponse(downloadRes) ||
@@ -235,7 +239,7 @@ export class NetworkInformationApi extends EventTarget {
                         this._updateFromFirstMeasurement(measurement);
                     }
                 }
-            } catch (error) {
+            } catch {
                 // Silent failure for individual measurements
             }
 
@@ -350,7 +354,14 @@ export class NetworkInformationApi extends EventTarget {
      * @returns Random hash string
      */
     protected _pseudoRandomHash(length: number = 7): string {
-        return (Math.random() + 1).toString(36).substring(2, 2 + length);
+        let str = (Math.random() + 1).toString(36).substring(2);
+
+        // Fallback if the result is too short
+        while (str.length < length) {
+            str += Math.random().toString(36).substring(2);
+        }
+
+        return str.substring(0, length);
     }
 
     /**
@@ -360,34 +371,43 @@ export class NetworkInformationApi extends EventTarget {
      */
     protected _buildTiming(
         res: Response,
+        startTime?: number,
+        endTime?: number,
     ): {
         ping: number;
         bps: number;
         duration: number;
-        perf: PerformanceResourceTiming;
+        perf?: PerformanceResourceTiming;
     } | null {
         const perf = performance.getEntriesByType('resource')
             .find((p) => p.name === res.url) as PerformanceResourceTiming;
 
-        if (!perf) return null;
+        if (perf) {
+            const serverTime = this._getServerTimeFromResponse(res);
+            const ttfb = perf.responseStart - perf.requestStart;
+            const payloadDownloadTime = perf.responseEnd - perf.responseStart;
 
-        const serverTime = this._getServerTimeFromResponse(res);
-        const ttfb = perf.responseStart - perf.requestStart;
-        const payloadDownloadTime = perf.responseEnd - perf.responseStart;
+            const ping = Math.max(
+                0.01,
+                ttfb - (serverTime || this._estimatedServerTime),
+            );
+            const duration = ping + payloadDownloadTime;
 
-        const ping = Math.max(
-            0.01,
-            ttfb - (serverTime || this._estimatedServerTime),
-        );
-        const duration = ping + payloadDownloadTime;
+            const numBytes = new URL(perf.name).searchParams.get('bytes');
+            const bits = 8 *
+                (perf.transferSize ||
+                    (+numBytes! * (1 + this._estimatedHeaderFraction)));
+            const bps = bits / (duration / 1000);
 
-        const numBytes = new URL(perf.name).searchParams.get('bytes');
-        const bits = 8 *
-            (perf.transferSize ||
-                (+numBytes! * (1 + this._estimatedHeaderFraction)));
-        const bps = bits / (duration / 1000);
-
-        return { ping, bps, duration, perf };
+            return { ping, bps, duration, perf };
+        } else if (startTime !== undefined && endTime !== undefined) {
+            // fallback: use manual timings
+            const duration = endTime - startTime;
+            // You may not have all details like serverTime, but can estimate
+            return { ping: duration, bps: 0, duration, perf: undefined };
+        } else {
+            return null;
+        }
     }
 
     /**

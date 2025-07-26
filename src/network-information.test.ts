@@ -2,9 +2,9 @@ import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
 import { assertSpyCalls, spy, stub } from '@std/testing/mock';
 import { FakeTime } from '@std/testing/time';
 
-import { NetworkInformationApi as _NetworkInformationApi } from './network-information.ts';
+import { NetworkInformationApi as RealNetworkInformationApi } from './network-information.ts';
 
-class NetworkInformationApi extends _NetworkInformationApi {
+class NetworkInformationApi extends RealNetworkInformationApi {
     /** Avoid init on tests */
     protected override async _init(): Promise<void> {}
 }
@@ -83,8 +83,8 @@ Deno.test('NetworkInformationApi - Pseudo random hash', () => {
     assertEquals(hash1 === hash2, false);
 
     // Test custom length
-    const hash3 = (api as any)._pseudoRandomHash(10);
-    assertEquals(hash3.length, 10);
+    const hash3 = (api as any)._pseudoRandomHash(20);
+    assertEquals(hash3.length, 20);
 });
 
 Deno.test('NetworkInformationApi - Event dispatching', async () => {
@@ -277,10 +277,10 @@ Deno.test('NetworkInformationApi - Update from first measurement', async () => {
 // Integration test with real network (optional, requires --allow-net)
 Deno.test({
     name: 'NetworkInformationApi - Real network integration',
-    ignore: true, // Set to false to run real network tests
+    ignore: false, // Set to false to run real network tests
     permissions: { net: true },
     fn: async () => {
-        const api = new _NetworkInformationApi({
+        const api = new RealNetworkInformationApi({
             measurementCount: 1,
             baseMeasurementSize: 1000, // Small size for faster test
         });
