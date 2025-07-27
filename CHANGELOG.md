@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.0](https://github.com/esroyo/network-information-api-polyfill/compare/v0.1.2...v0.2.0) (2025-07-27)
+
+
+### Features
+
+* improve the estimation when perf resource is not avail ([fee3df3](https://github.com/esroyo/network-information-api-polyfill/commit/fee3df3088adae45941655d51747230e31d43f4e))
+
 ## [0.1.2](https://github.com/esroyo/network-information-api-polyfill/compare/v0.1.1...v0.1.2) (2025-07-26)
 
 
