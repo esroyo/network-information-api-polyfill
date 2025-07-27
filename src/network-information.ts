@@ -60,6 +60,7 @@ export class NetworkInformationApi extends EventTarget {
 
     protected _measuring: boolean = false;
     protected _lastMeasurement: number = 0;
+    protected _periodicTimer?: number;
 
     /**
      * Create a new NetworkInformationApi instance
@@ -68,26 +69,17 @@ export class NetworkInformationApi extends EventTarget {
     constructor(options: NetworkInformationConfig = {}) {
         super();
 
-        const config: Required<NetworkInformationConfig> = {
-            cfOrigin: 'https://speed.cloudflare.com',
-            estimatedServerTime: 10,
-            estimatedHeaderFraction: 0.005,
-            measurementCount: 2,
-            baseMeasurementSize: 100000,
-            measurementSizeMultiplier: 2,
-            periodicMeasurement: false,
-            measurementInterval: 30000,
-            ...options,
-        };
-
-        this._cfOrigin = config.cfOrigin;
-        this._estimatedServerTime = config.estimatedServerTime;
-        this._estimatedHeaderFraction = config.estimatedHeaderFraction;
-        this._measurementCount = config.measurementCount;
-        this._baseMeasurementSize = config.baseMeasurementSize;
-        this._measurementSizeMultiplier = config.measurementSizeMultiplier;
-        this._periodicMeasurement = config.periodicMeasurement;
-        this._measurementInterval = config.measurementInterval;
+        // Apply configuration with defaults
+        this._cfOrigin = options.cfOrigin ?? 'https://speed.cloudflare.com';
+        this._estimatedServerTime = options.estimatedServerTime ?? 10;
+        this._estimatedHeaderFraction = options.estimatedHeaderFraction ??
+            0.005;
+        this._measurementCount = options.measurementCount ?? 2;
+        this._baseMeasurementSize = options.baseMeasurementSize ?? 100_000;
+        this._measurementSizeMultiplier = options.measurementSizeMultiplier ??
+            2;
+        this._periodicMeasurement = options.periodicMeasurement ?? false;
+        this._measurementInterval = options.measurementInterval ?? 30_000;
 
         this._init();
     }
@@ -127,8 +119,7 @@ export class NetworkInformationApi extends EventTarget {
         type: string,
         data: NetworkChangeEventDetail = {},
     ): void {
-        const event = new CustomEvent(type, { detail: data });
-        this.dispatchEvent(event);
+        this.dispatchEvent(new CustomEvent(type, { detail: data }));
     }
 
     /**
@@ -146,14 +137,19 @@ export class NetworkInformationApi extends EventTarget {
      * Start periodic network measurements
      */
     protected _startPeriodicMeasurements(): void {
-        setInterval(() => {
-            if (
-                !this._measuring &&
-                Date.now() - this._lastMeasurement > this._measurementInterval
-            ) {
+        this._periodicTimer = setInterval(() => {
+            if (this._canPerformMeasurement()) {
                 this._performMeasurement();
             }
-        }, 10000);
+        }, 10_000);
+    }
+
+    /**
+     * Check if measurement can be performed
+     */
+    protected _canPerformMeasurement(): boolean {
+        return !this._measuring &&
+            Date.now() - this._lastMeasurement > this._measurementInterval;
     }
 
     /**
@@ -176,75 +172,128 @@ export class NetworkInformationApi extends EventTarget {
     }
 
     /**
+     * Create measurement URL for given parameters
+     */
+    protected _createMeasurementUrl(
+        uid: string,
+        bytes: number,
+        index: number,
+    ): string {
+        return `${this._cfOrigin}/__down?measId=${uid}&bytes=${bytes}&i=${index}`;
+    }
+
+    /**
+     * Perform a single measurement
+     * @returns A network measurement
+     */
+    protected async _performSingleMeasurement(
+        uid: string,
+        measurementSize: number,
+        index: number,
+    ): Promise<NetworkMeasurement | null> {
+        try {
+            // Measure latency
+            const latencyResult = await this._measureLatency(uid, index);
+            if (!latencyResult) return null;
+
+            await this._delay(50);
+
+            // Measure download
+            const downloadResult = await this._measureDownload(
+                uid,
+                measurementSize,
+                index,
+            );
+            if (!downloadResult) return null;
+
+            return {
+                rtt: latencyResult.ping,
+                downlink: downloadResult.mbps,
+                measurementSize,
+                duration: downloadResult.networkTime,
+                realDuration: downloadResult.totalTime,
+                timestamp: Date.now(),
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Perform latency measurement
+     */
+    protected async _measureLatency(
+        uid: string,
+        index: number,
+    ): Promise<{ ping: number } | null> {
+        const startTime = performance.now();
+        const response = await fetch(this._createMeasurementUrl(uid, 0, index));
+        await response.text();
+        const endTime = performance.now();
+
+        const timing = this._buildTiming(response, startTime, endTime);
+        return timing ? { ping: timing.ping } : null;
+    }
+
+    /**
+     * Perform download measurement
+     */
+    protected async _measureDownload(
+        uid: string,
+        measurementSize: number,
+        index: number,
+    ): Promise<
+        { mbps: number; networkTime: number; totalTime: number } | null
+    > {
+        const startTime = performance.now();
+        const response = await fetch(
+            this._createMeasurementUrl(uid, measurementSize, index),
+        );
+        await response.text();
+        const endTime = performance.now();
+        const totalTime = endTime - startTime;
+
+        const serverTime = this._getServerTimeFromResponse(response) ||
+            this._estimatedServerTime;
+        const networkTime = Math.max(1, totalTime - serverTime);
+        const bits = 8 *
+            (measurementSize * (1 + this._estimatedHeaderFraction));
+        const bps = bits / (networkTime / 1_000);
+        const mbps = bps / 1_000_000;
+
+        return { mbps, networkTime, totalTime };
+    }
+
+    /**
      * Measure network speed using multiple test sizes
-     * @returns Array of network measurements
      */
     protected async _measureNetworkSpeed(): Promise<NetworkMeasurement[]> {
         const uid = this._pseudoRandomHash(5);
         const measurements: NetworkMeasurement[] = [];
 
         for (let i = 0; i < this._measurementCount; i++) {
-            try {
-                const measurementSize = this._baseMeasurementSize *
-                    Math.pow(this._measurementSizeMultiplier, i);
+            const measurementSize = this._baseMeasurementSize *
+                Math.pow(this._measurementSizeMultiplier, i);
 
-                // Measure latency
-                const latencyStartTime = performance.now();
-                const latencyRes = await fetch(
-                    `${this._cfOrigin}/__down?measId=${uid}&bytes=0&i=${i}`,
-                );
-                await latencyRes.text();
-                const latencyEndTime = performance.now();
+            const measurement = await this._performSingleMeasurement(
+                uid,
+                measurementSize,
+                i,
+            );
 
-                await new Promise((resolve) => setTimeout(resolve, 50));
-
-                // Measure download
-                const downloadStartTime = performance.now();
-                const downloadRes = await fetch(
-                    `${this._cfOrigin}/__down?measId=${uid}&bytes=${measurementSize}&i=${i}`,
-                );
-                await downloadRes.text();
-                const downloadEndTime = performance.now();
-                const downloadDuration = downloadEndTime - downloadStartTime;
-
-                await new Promise((resolve) => setTimeout(resolve, 50));
-                const latencyTiming = this._buildTiming(
-                    latencyRes,
-                    latencyStartTime,
-                    latencyEndTime,
-                );
-
-                const serverTime =
-                    this._getServerTimeFromResponse(downloadRes) ||
-                    this._estimatedServerTime;
-                const networkTime = Math.max(1, downloadDuration - serverTime);
-                const bits = 8 *
-                    (measurementSize * (1 + this._estimatedHeaderFraction));
-                const bps = bits / (networkTime / 1000);
-                const calculatedMbps = bps / 1000000;
-
-                if (latencyTiming) {
-                    const measurement: NetworkMeasurement = {
-                        rtt: latencyTiming.ping,
-                        downlink: calculatedMbps,
-                        measurementSize,
-                        duration: networkTime,
-                        realDuration: downloadDuration,
-                        timestamp: Date.now(),
-                    };
-
-                    measurements.push(measurement);
-
-                    if (i === 0) {
-                        this._updateFromFirstMeasurement(measurement);
-                    }
+            if (measurement) {
+                measurements.push(measurement);
+                if (i === 0 && this._measurementCount > 1) {
+                    this._updateNetworkProperties(
+                        measurement.downlink,
+                        measurement.rtt,
+                        true,
+                    );
                 }
-            } catch {
-                // Silent failure for individual measurements
             }
 
             if (i < this._measurementCount - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 200));
+                await this._delay(200);
             }
         }
 
@@ -252,27 +301,29 @@ export class NetworkInformationApi extends EventTarget {
     }
 
     /**
-     * Update network properties from first measurement for immediate feedback
-     * @param measurement The first measurement result
+     * Update network properties with common logic
      */
-    protected _updateFromFirstMeasurement(
-        measurement: NetworkMeasurement,
+    protected _updateNetworkProperties(
+        downlink: number,
+        rtt: number,
+        isPreliminary: boolean = false,
     ): void {
-        this._rtt = measurement.rtt;
-        this._downlink = measurement.downlink;
-        this._uplink = measurement.downlink * 0.5;
-        this._effectiveType = this._classifyConnection(
-            measurement.downlink,
-            measurement.rtt,
-        );
+        const prevEffectiveType = this._effectiveType;
 
-        this._dispatchNetworkEvent('change', {
-            downlink: this._downlink,
-            uplink: this._uplink,
-            rtt: this._rtt,
-            effectiveType: this._effectiveType,
-            preliminary: true,
-        });
+        this._downlink = downlink;
+        this._rtt = rtt;
+        this._uplink = downlink * 0.5;
+        this._effectiveType = this._classifyConnection(downlink, rtt);
+
+        if (prevEffectiveType !== this._effectiveType || !isPreliminary) {
+            this._dispatchNetworkEvent('change', {
+                downlink: this._downlink,
+                uplink: this._uplink,
+                rtt: this._rtt,
+                effectiveType: this._effectiveType,
+                preliminary: isPreliminary,
+            });
+        }
     }
 
     /**
@@ -284,33 +335,16 @@ export class NetworkInformationApi extends EventTarget {
     ): void {
         if (measurements.length === 0) return;
 
-        const prevEffectiveType = this._effectiveType;
-
         const rtts = measurements.map((m) => m.rtt).sort((a, b) => a - b);
         const downlinks = measurements.map((m) => m.downlink).sort((a, b) =>
             a - b
         );
 
-        this._rtt = this._median(rtts);
-        this._downlink = this._median(downlinks);
-        this._uplink = this._downlink * 0.5;
-
-        this._effectiveType = this._classifyConnection(
-            this._downlink,
-            this._rtt,
+        this._updateNetworkProperties(
+            this._median(downlinks),
+            this._median(rtts),
+            false,
         );
-
-        if (
-            prevEffectiveType !== this._effectiveType || measurements.length > 1
-        ) {
-            this._dispatchNetworkEvent('change', {
-                downlink: this._downlink,
-                uplink: this._uplink,
-                rtt: this._rtt,
-                effectiveType: this._effectiveType,
-                preliminary: false,
-            });
-        }
     }
 
     /**
@@ -323,45 +357,13 @@ export class NetworkInformationApi extends EventTarget {
         downlinkMbps: number,
         rttMs: number,
     ): EffectiveConnectionType {
-        if (downlinkMbps === 0 || !isFinite(downlinkMbps) || rttMs > 2000) {
+        if (downlinkMbps === 0 || !isFinite(downlinkMbps) || rttMs > 2_000) {
             return 'slow-2g';
         }
-
-        if (downlinkMbps < 0.15 || rttMs > 400) {
-            return 'slow-2g';
-        } else if (downlinkMbps < 0.65 || rttMs > 150) {
-            return '2g';
-        } else if (downlinkMbps < 4.5 || rttMs > 50) {
-            return '3g';
-        } else {
-            return '4g';
-        }
-    }
-
-    /**
-     * Calculate median value from array of numbers
-     * @param arr Array of numbers
-     * @returns Median value
-     */
-    protected _median(arr: number[]): number {
-        const mid = Math.floor(arr.length / 2);
-        return arr.length % 2 !== 0 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
-    }
-
-    /**
-     * Generate pseudo-random hash for measurement identification
-     * @param length Length of hash string
-     * @returns Random hash string
-     */
-    protected _pseudoRandomHash(length: number = 7): string {
-        let str = (Math.random() + 1).toString(36).substring(2);
-
-        // Fallback if the result is too short
-        while (str.length < length) {
-            str += Math.random().toString(36).substring(2);
-        }
-
-        return str.substring(0, length);
+        if (downlinkMbps < 0.15 || rttMs > 400) return 'slow-2g';
+        if (downlinkMbps < 0.65 || rttMs > 150) return '2g';
+        if (downlinkMbps < 4.5 || rttMs > 50) return '3g';
+        return '4g';
     }
 
     /**
@@ -382,32 +384,75 @@ export class NetworkInformationApi extends EventTarget {
         const perf = performance.getEntriesByType('resource')
             .find((p) => p.name === res.url) as PerformanceResourceTiming;
 
+        const url = new URL(res.url);
+        const numBytes = parseInt(url.searchParams.get('bytes') || '0', 10);
+        const serverTime = this._getServerTimeFromResponse(res) ||
+            this._estimatedServerTime;
+
+        let ping: number;
+        let networkDuration: number;
+        let transferSize: number;
+
         if (perf) {
-            const serverTime = this._getServerTimeFromResponse(res);
             const ttfb = perf.responseStart - perf.requestStart;
             const payloadDownloadTime = perf.responseEnd - perf.responseStart;
 
-            const ping = Math.max(
-                0.01,
-                ttfb - (serverTime || this._estimatedServerTime),
-            );
-            const duration = ping + payloadDownloadTime;
-
-            const numBytes = new URL(perf.name).searchParams.get('bytes');
-            const bits = 8 *
-                (perf.transferSize ||
-                    (+numBytes! * (1 + this._estimatedHeaderFraction)));
-            const bps = bits / (duration / 1000);
-
-            return { ping, bps, duration, perf };
+            ping = Math.max(0.01, ttfb - serverTime);
+            networkDuration = ping + payloadDownloadTime;
+            transferSize = perf.transferSize ||
+                (numBytes * (1 + this._estimatedHeaderFraction));
         } else if (startTime !== undefined && endTime !== undefined) {
-            // fallback: use manual timings
-            const duration = endTime - startTime;
-            // You may not have all details like serverTime, but can estimate
-            return { ping: duration, bps: 0, duration, perf: undefined };
+            const totalDuration = endTime - startTime;
+            networkDuration = Math.max(1, totalDuration - serverTime);
+
+            ping = numBytes === 0
+                ? Math.max(1, networkDuration * 0.9)
+                : Math.min(networkDuration * 0.3, 200);
+
+            transferSize = numBytes * (1 + this._estimatedHeaderFraction);
         } else {
             return null;
         }
+
+        const bits = 8 * transferSize;
+        const downloadTime = numBytes === 0
+            ? 0
+            : Math.max(1, networkDuration - ping);
+        const bps = numBytes === 0 ? 0 : bits / (downloadTime / 1_000);
+
+        return {
+            ping,
+            bps,
+            duration: networkDuration,
+            perf: perf || undefined,
+        };
+    }
+
+    /**
+     * Calculate median value from array of numbers
+     * @param arr Array of numbers
+     * @returns Median value
+     */
+    protected _median(arr: number[]): number {
+        const mid = Math.floor(arr.length / 2);
+        return arr.length % 2 !== 0 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
+    }
+
+    protected _delay(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Generate pseudo-random hash for measurement identification
+     * @param length Length of hash string
+     * @returns Random hash string
+     */
+    protected _pseudoRandomHash(length: number = 7): string {
+        let str = '';
+        while (str.length < length) {
+            str += (Math.random() + 1).toString(36).substring(2);
+        }
+        return str.substring(0, length);
     }
 
     /**
@@ -418,7 +463,7 @@ export class NetworkInformationApi extends EventTarget {
     protected _getServerTimeFromResponse(res: Response): number | null {
         const serverTiming = res.headers.get('server-timing');
         if (serverTiming) {
-            const match = serverTiming.match(/dur=([0-9.]+)/);
+            const match = serverTiming.match(/.*dur=([0-9.]+)/);
             if (match) return +match[1];
         }
         return null;
@@ -445,5 +490,24 @@ export class NetworkInformationApi extends EventTarget {
             saveData: this._saveData,
             type: this._type,
         };
+    }
+
+    /**
+     * Dispose of the NetworkInformationApi instance and cleanup resources
+     * Call this when you no longer need the instance to prevent memory leaks
+     */
+    public dispose(): void {
+        // Clear the periodic measurement timer
+        if (this._periodicTimer !== undefined) {
+            clearInterval(this._periodicTimer);
+            this._periodicTimer = undefined;
+        }
+
+        // Cancel any ongoing measurements (best effort)
+        this._measuring = false;
+
+        // Clear all event listeners
+        // Note: EventTarget doesn't have a removeAllListeners method,
+        // so consumers should manually remove their listeners before calling dispose()
     }
 }

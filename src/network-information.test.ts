@@ -245,35 +245,6 @@ Deno.test('NetworkInformationApi - Update from measurements with empty array', (
     assertEquals(api.effectiveType, undefined);
 });
 
-Deno.test('NetworkInformationApi - Update from first measurement', async () => {
-    const api = new NetworkInformationApi();
-    let changeEventFired = false;
-
-    api.addEventListener('change', () => {
-        changeEventFired = true;
-    });
-
-    const measurement = {
-        rtt: 100,
-        downlink: 2.0,
-        measurementSize: 100000,
-        duration: 500,
-        realDuration: 510,
-        timestamp: Date.now(),
-    };
-
-    (api as any)._updateFromFirstMeasurement(measurement);
-
-    // Allow event to process
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    assertEquals(api.rtt, 100);
-    assertEquals(api.downlink, 2.0);
-    assertEquals(api.uplink, 1.0); // 50% of downlink
-    assertEquals(api.effectiveType, '3g');
-    assertEquals(changeEventFired, true);
-});
-
 // Integration test with real network (optional, requires --allow-net)
 Deno.test({
     name: 'NetworkInformationApi - Real network integration',
