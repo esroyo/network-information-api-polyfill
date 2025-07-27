@@ -49,6 +49,12 @@ export interface NetworkInformationConfig {
     measurementInterval?: number;
 }
 
+/** Optional dependencies for the NetworkInformationApi */
+export interface NetworkInformationServices {
+    /** Fetch API */
+    fetch?: typeof fetch;
+}
+
 /** Connection information matching W3C Network Information Api */
 export interface ConnectionInfo {
     /** Downlink speed in Mbps */

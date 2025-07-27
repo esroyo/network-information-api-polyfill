@@ -3,6 +3,7 @@ import type {
     EffectiveConnectionType,
     NetworkChangeEventDetail,
     NetworkInformationConfig,
+    NetworkInformationServices,
     NetworkMeasurement,
     NetworkType,
     PerformanceResourceTiming,
@@ -51,6 +52,8 @@ export class NetworkInformationApi extends EventTarget {
         '4g': { downlink: 4, uplink: 3, rtt: 20, effectiveType: '4g' },
     };
 
+    protected readonly _fetch: typeof fetch;
+
     protected _downlink?: number;
     protected _uplink?: number;
     protected _rtt?: number;
@@ -66,7 +69,10 @@ export class NetworkInformationApi extends EventTarget {
      * Create a new NetworkInformationApi instance
      * @param options Configuration options for the network measurement
      */
-    constructor(options: NetworkInformationConfig = {}) {
+    constructor(
+        options: NetworkInformationConfig = {},
+        services: NetworkInformationServices = {},
+    ) {
         super();
 
         // Apply configuration with defaults
@@ -80,6 +86,8 @@ export class NetworkInformationApi extends EventTarget {
             2;
         this._periodicMeasurement = options.periodicMeasurement ?? false;
         this._measurementInterval = options.measurementInterval ?? 30_000;
+
+        this._fetch = services.fetch ?? fetch;
 
         this._init();
     }
@@ -227,7 +235,9 @@ export class NetworkInformationApi extends EventTarget {
         index: number,
     ): Promise<{ ping: number } | null> {
         const startTime = performance.now();
-        const response = await fetch(this._createMeasurementUrl(uid, 0, index));
+        const response = await this._fetch(
+            this._createMeasurementUrl(uid, 0, index),
+        );
         await response.text();
         const endTime = performance.now();
 
@@ -246,7 +256,7 @@ export class NetworkInformationApi extends EventTarget {
         { mbps: number; networkTime: number; totalTime: number } | null
     > {
         const startTime = performance.now();
-        const response = await fetch(
+        const response = await this._fetch(
             this._createMeasurementUrl(uid, measurementSize, index),
         );
         await response.text();

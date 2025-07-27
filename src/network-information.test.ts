@@ -1,5 +1,5 @@
 import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
-import { assertSpyCalls, spy, stub } from '@std/testing/mock';
+import { assertSpyCalls, returnsNext, spy, stub } from '@std/testing/mock';
 import { FakeTime } from '@std/testing/time';
 
 import { NetworkInformationApi as RealNetworkInformationApi } from './network-information.ts';
@@ -8,6 +8,30 @@ class NetworkInformationApi extends RealNetworkInformationApi {
     /** Avoid init on tests */
     protected override async _init(): Promise<void> {}
 }
+
+const createFetchMock = (
+    responses: Array<Promise<Response> | Response | Error>,
+) => {
+    const nextReply = returnsNext(responses);
+    const fetchMock = spy(async (
+        _input: RequestInfo | URL,
+        _init?: RequestInit,
+    ): Promise<Response> => {
+        const delayedResponse = Promise.withResolvers<Response>();
+        if (_init?.signal) {
+            _init.signal.addEventListener('abort', (ev) => {
+                if ('reason' in ev.target!) {
+                    delayedResponse.reject(ev.target.reason);
+                }
+            });
+        }
+        Promise.resolve(nextReply()).then((value) =>
+            delayedResponse.resolve(value)
+        );
+        return delayedResponse.promise;
+    });
+    return fetchMock;
+};
 
 // Test Suite
 Deno.test('NetworkInformationApi - Constructor', () => {
@@ -20,6 +44,8 @@ Deno.test('NetworkInformationApi - Constructor', () => {
     assertEquals(api.uplink, undefined);
     assertEquals(api.rtt, undefined);
     assertEquals(api.effectiveType, undefined);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Constructor with options', () => {
@@ -37,6 +63,8 @@ Deno.test('NetworkInformationApi - Constructor with options', () => {
     assertEquals((api as any)._measurementCount, 5);
     assertEquals((api as any)._baseMeasurementSize, 50000);
     assertEquals((api as any)._periodicMeasurement, true);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Classification logic', () => {
@@ -52,6 +80,8 @@ Deno.test('NetworkInformationApi - Classification logic', () => {
     assertEquals((api as any)._classifyConnection(0, 100), 'slow-2g');
     assertEquals((api as any)._classifyConnection(Infinity, 100), 'slow-2g');
     assertEquals((api as any)._classifyConnection(5.0, 3000), 'slow-2g');
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Median calculation', () => {
@@ -68,6 +98,8 @@ Deno.test('NetworkInformationApi - Median calculation', () => {
 
     // Test two elements
     assertEquals((api as any)._median([10, 20]), 15);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Pseudo random hash', () => {
@@ -85,6 +117,8 @@ Deno.test('NetworkInformationApi - Pseudo random hash', () => {
     // Test custom length
     const hash3 = (api as any)._pseudoRandomHash(20);
     assertEquals(hash3.length, 20);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Event dispatching', async () => {
@@ -114,6 +148,8 @@ Deno.test('NetworkInformationApi - Event dispatching', async () => {
     assertEquals(eventDetail.downlink, 5.0);
     assertEquals(eventDetail.effectiveType, '4g');
     assertEquals(eventDetail.preliminary, true);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - getConnectionInfo', () => {
@@ -133,61 +169,55 @@ Deno.test('NetworkInformationApi - getConnectionInfo', () => {
     assertEquals(info.effectiveType, '3g');
     assertEquals(info.saveData, false);
     assertEquals(info.type, 'unknown');
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Measurement state management', async () => {
-    const api = new NetworkInformationApi();
-
     // Mock fetch to avoid real network calls
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = spy(() =>
-        Promise.resolve(
-            new Response('test', {
-                headers: { 'server-timing': 'dur=10' },
-            }),
-        )
-    );
+    const fetch = createFetchMock([
+        new Response('test', {
+            headers: { 'server-timing': 'dur=10' },
+        }),
+    ]);
 
-    try {
-        assertEquals((api as any)._measuring, false);
+    const api = new NetworkInformationApi(undefined, { fetch });
 
-        // Start measurement
-        const measurePromise = api.measure();
-        assertEquals((api as any)._measuring, true);
+    assertEquals((api as any)._measuring, false);
 
-        await measurePromise;
-        assertEquals((api as any)._measuring, false);
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
+    // Start measurement
+    const measurePromise = api.measure();
+    assertEquals((api as any)._measuring, true);
+
+    await measurePromise;
+    assertEquals((api as any)._measuring, false);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Concurrent measurement prevention', async () => {
-    const api = new NetworkInformationApi();
-
     // Mock fetch to simulate slow network
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = spy(() =>
+    const fetch = createFetchMock([
         new Promise((resolve) =>
             setTimeout(() => resolve(new Response('test')), 100)
-        )
-    );
+        ),
+    ]);
 
-    try {
-        // Start first measurement
-        const promise1 = api.measure();
-        assertEquals((api as any)._measuring, true);
+    const api = new NetworkInformationApi(undefined, { fetch });
 
-        // Try to start second measurement (should be ignored)
-        const promise2 = api.measure();
+    // Start first measurement
+    const promise1 = api.measure();
+    assertEquals((api as any)._measuring, true);
 
-        await Promise.all([promise1, promise2]);
+    // Try to start second measurement (should be ignored)
+    const promise2 = api.measure();
 
-        // Both should resolve, but second should return immediately
-        assertEquals((api as any)._measuring, false);
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
+    await Promise.all([promise1, promise2]);
+
+    // Both should resolve, but second should return immediately
+    assertEquals((api as any)._measuring, false);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Periodic measurements', async () => {
@@ -212,24 +242,22 @@ Deno.test('NetworkInformationApi - Periodic measurements', async () => {
 
     measureSpy.restore();
     time.restore();
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Error handling in measurement', async () => {
-    const api = new NetworkInformationApi();
-
     // Mock fetch to throw error
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = spy(() => Promise.reject(new Error('Network error')));
+    const fetch = createFetchMock([new Error('Network error')]);
 
-    try {
-        // Should not throw, should handle error silently
-        await api.measure();
+    const api = new NetworkInformationApi(undefined, { fetch });
 
-        // Measurement should be reset to false even after error
-        assertEquals((api as any)._measuring, false);
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
+    // Should not throw, should handle error silently
+    await api.measure();
+
+    // Measurement should be reset to false even after error
+    assertEquals((api as any)._measuring, false);
+
+    api.dispose();
 });
 
 Deno.test('NetworkInformationApi - Update from measurements with empty array', () => {
@@ -243,6 +271,8 @@ Deno.test('NetworkInformationApi - Update from measurements with empty array', (
     assertEquals(api.uplink, undefined);
     assertEquals(api.rtt, undefined);
     assertEquals(api.effectiveType, undefined);
+
+    api.dispose();
 });
 
 // Integration test with real network (optional, requires --allow-net)
@@ -257,7 +287,9 @@ Deno.test({
         });
 
         // Wait for initial measurement
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => {
+            api.addEventListener('change', resolve);
+        });
 
         assertExists(api.downlink);
         assertExists(api.uplink);
@@ -269,5 +301,7 @@ Deno.test({
         assertExists(info.uplink);
         assertExists(info.rtt);
         assertExists(info.effectiveType);
+
+        api.dispose();
     },
 });
