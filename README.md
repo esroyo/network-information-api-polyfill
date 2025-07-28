@@ -22,7 +22,9 @@ not available.
 
 ## Try it right now (🚀 no installation!)
 
-**Test in your browser console in 2 seconds:**
+### Check the [live playground](https://esroyo.github.io/network-information-api-polyfill/) 👉
+
+Or manually test in your browser console in 2 seconds:
 
 ```javascript
 import('https://esm.sh/jsr/@esroyo/network-information-api-polyfill').then(

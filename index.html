@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Information API polyfill playground</title>
+    <!-- Basic styling for a clean interface -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+        }
+        main {
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 { text-align: center; }
+        h1, h2 { color: #1a73e8; }
+        footer {
+            padding: 2rem;
+            text-align: center;
+        }
+        footer a {
+            color: #333;
+            text-decoration-style: wavy;
+            text-decoration-color: #c00;
+            font-family: monospace;
+            font-size: 1rem;
+            opacity: .3;
+            transition: opacity .3s ease;
+        }
+        footer a:hover { opacity: .9; }
+        form {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .hidden { display: none; }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .buttons {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        #submit-btn {
+            background-color: #1a73e8;
+            color: white;
+        }
+        #submit-btn:disabled {
+            background-color: #9ac2f7;
+            cursor: not-allowed;
+        }
+        #reset-btn {
+            background-color: #e0e0e0;
+            color: #333;
+        }
+        #results {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #results pre {
+            font-size: 1rem;
+            height: 11rem;
+            overflow: auto;
+            background: #2d2d2d;
+            color: #1ae827;
+            padding: 1rem;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>📶 Network Information API polyfill</h1>
+        
+        <!-- Form for configuring the API -->
+        <form id="options-form">
+            <h2>Constructor Configuration</h2>
+            <div class="form-group">
+                <label for="measurementCount">Measurement Count</label>
+                <input type="number" id="measurementCount" name="measurementCount" value="2">
+            </div>
+            <div class="form-group">
+                <label for="baseMeasurementSize">Base Measurement Size (bytes)</label>
+                <input type="number" id="baseMeasurementSize" name="baseMeasurementSize" value="100000">
+            </div>
+            <div class="form-group">
+                <label for="measurementSizeMultiplier">Size Multiplier</label>
+                <input type="number" id="measurementSizeMultiplier" name="measurementSizeMultiplier" value="2" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="measurementInterval">Measurement Interval (ms)</label>
+                <input type="number" id="measurementInterval" name="measurementInterval" value="30000">
+            </div>
+            <div class="form-group">
+                <label for="periodicMeasurement">Periodic Re-measurement</label>
+                <select id="periodicMeasurement" name="periodicMeasurement">
+                    <option value="false" selected>false</option>
+                    <option value="true">true</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="cfOrigin">Cloudflare Origin URL</label>
+                <input type="text" id="cfOrigin" name="cfOrigin" value="https://speed.cloudflare.com">
+            </div>
+            <div class="form-group hidden">
+                <label for="estimatedServerTime">Estimated Server Time (ms)</label>
+                <input type="number" id="estimatedServerTime" name="estimatedServerTime" value="10">
+            </div>
+            <div class="form-group hidden">
+                <label for="estimatedHeaderFraction">Header Size Fraction</label>
+                <input type="number" id="estimatedHeaderFraction" name="estimatedHeaderFraction" value="0.005" step="0.001">
+            </div>
+
+            <div class="buttons">
+                <button type="button" id="reset-btn">Reset</button>
+                <button type="submit" id="submit-btn">Start</button>
+            </div>
+        </form>
+
+        <!-- Section to display results -->
+        <div id="results">
+            <h2>Live Results</h2>
+            <p>Submit the form to see the live events from the API.</p>
+            <pre id="output"><code></code></pre>
+        </div>
+
+        <footer>
+            <a href="https://github.com/esroyo/network-information-api-polyfill" target="_blank">source code</a>
+        </footer>
+    </main>
+
+    <!-- Import the library and implement the logic -->
+    <script type="module">
+        // Import from a CDN for transpilation and easy access
+        import { NetworkInformationApi } from 'https://esm.sh/jsr/@esroyo/network-information-api-polyfill/pure';
+
+        const form = document.getElementById('options-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const output = document.getElementById('output').querySelector('code');
+
+        const logDate = () => new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          fractionalSecondDigits: 3
+        });
+        
+        let networkApiInstance = null;
+        let eventCounter = 0;
+
+        /**
+         * Gathers form data and constructs the config object.
+         */
+        function getOptionsFromForm() {
+            const formData = new FormData(form);
+            const config = {};
+
+            // Helper to add property to the config object if the value is not empty/null.
+            // It correctly parses strings, integers, floats, and booleans.
+            const addProp = (key, type = 'string') => {
+                const value = formData.get(key);
+                if (value !== null && value !== '') {
+                    switch(type) {
+                        case 'int':
+                            config[key] = parseInt(value, 10);
+                            break;
+                        case 'float':
+                            config[key] = parseFloat(value);
+                            break;
+                        case 'boolean':
+                            config[key] = value === 'true';
+                            break;
+                        default:
+                            config[key] = value;
+                    }
+                }
+            };
+
+            addProp('cfOrigin', 'string');
+            addProp('estimatedServerTime', 'int');
+            addProp('estimatedHeaderFraction', 'float');
+            addProp('measurementCount', 'int');
+            addProp('baseMeasurementSize', 'int');
+            addProp('measurementSizeMultiplier', 'float');
+            addProp('periodicMeasurement', 'boolean');
+            addProp('measurementInterval', 'int');
+            
+            return config;
+        }
+
+        /**
+         * Handles the form submission to create and start the API instance.
+         */
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            
+            if (networkApiInstance) return; // Do nothing if instance exists
+
+            const config = getOptionsFromForm();
+
+            // Create a new instance with the specified configuration
+            networkApiInstance = new NetworkInformationApi(config);
+            
+            // Listen for changes and display them
+            networkApiInstance.addEventListener('change', displayResults);
+            
+            // Initial display
+            output.textContent = `[Log] - ${logDate()}\n\nInstance created. Waiting for "change" events...\n`;
+            // Disable form submission until reset
+            submitBtn.disabled = true;
+        });
+
+        /**
+         * Resets the UI and disposes of the API instance.
+         */
+        resetBtn.addEventListener('click', () => {
+            if (networkApiInstance) {
+                networkApiInstance.removeEventListener('change', displayResults);
+                networkApiInstance.dispose();
+                networkApiInstance = null;
+            }
+            
+            // Reset UI elements
+            eventCounter = 0;
+            output.textContent = '';
+            document.getElementById('results').querySelector('p').style.display = 'block';
+            submitBtn.disabled = false;
+        });
+
+        /**
+         * Displays the current state of the network information upon 'change' event.
+         */
+        function displayResults() {
+            if (!networkApiInstance) return;
+
+            // Hide the initial placeholder message
+            document.getElementById('results').querySelector('p').style.display = 'none';
+            
+            const currentState = {
+                type: networkApiInstance.type,
+                effectiveType: networkApiInstance.effectiveType,
+                rtt: networkApiInstance.rtt,
+                downlink: networkApiInstance.downlink,
+                saveData: networkApiInstance.saveData,
+            };
+
+            const eventLog = `[Event ${eventCounter++}] - ${logDate()}\n\n${JSON.stringify(currentState, null, 2)}\n\n`;
+            
+            // Prepend the new event to the output to show the latest first
+            output.textContent = eventLog + output.textContent;
+        }
+    </script>
+</body>
+</html>
