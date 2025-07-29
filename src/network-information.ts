@@ -87,7 +87,7 @@ export class NetworkInformationApi extends EventTarget {
         this._periodicMeasurement = options.periodicMeasurement ?? false;
         this._measurementInterval = options.measurementInterval ?? 30_000;
 
-        this._fetch = services.fetch ?? fetch;
+        this._fetch = services.fetch ?? fetch.bind(null);
 
         this._init();
     }
