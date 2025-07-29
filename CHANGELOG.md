@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.2](https://github.com/esroyo/network-information-api-polyfill/compare/v0.2.1...v0.2.2) (2025-07-29)
+
+
+### Bug Fixes
+
+* avoid fetch call with an object context ([bf2a51a](https://github.com/esroyo/network-information-api-polyfill/commit/bf2a51a9094dc5c425f6fd312533300e186c221d))
+
 ## [0.2.1](https://github.com/esroyo/network-information-api-polyfill/compare/v0.2.0...v0.2.1) (2025-07-28)
 
 
