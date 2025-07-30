@@ -70,16 +70,39 @@ Deno.test('NetworkInformationApi - Constructor with options', () => {
 Deno.test('NetworkInformationApi - Classification logic', () => {
     const api = new NetworkInformationApi();
 
-    // Test classification boundaries
-    assertEquals((api as any)._classifyConnection(0.1, 100), 'slow-2g');
-    assertEquals((api as any)._classifyConnection(0.5, 200), '2g');
-    assertEquals((api as any)._classifyConnection(2.0, 80), '3g');
-    assertEquals((api as any)._classifyConnection(8.0, 30), '4g');
+    // Test classification boundaries based on official WICG spec
+
+    // slow-2g: < 0.05 Mbps OR RTT > 1400ms
+    assertEquals((api as any)._classifyConnection(0.04, 100), 'slow-2g'); // Below bandwidth threshold
+    assertEquals((api as any)._classifyConnection(0.1, 1500), 'slow-2g'); // Above RTT threshold
+    assertEquals((api as any)._classifyConnection(0.04, 1500), 'slow-2g'); // Both conditions
+
+    // 2g: < 0.07 Mbps OR RTT > 270ms (but not slow-2g)
+    assertEquals((api as any)._classifyConnection(0.06, 100), '2g'); // Below 70 kbps, good RTT
+    assertEquals((api as any)._classifyConnection(0.1, 500), '2g'); // Good bandwidth, high RTT
+    assertEquals((api as any)._classifyConnection(0.06, 500), '2g'); // Both conditions
+
+    // 3g: < 0.7 Mbps (but not 2g or slow-2g)
+    assertEquals((api as any)._classifyConnection(0.5, 100), '3g'); // Below 700 kbps, good RTT
+    assertEquals((api as any)._classifyConnection(0.69, 50), '3g'); // Just under threshold
+
+    // 4g: >= 0.7 Mbps
+    assertEquals((api as any)._classifyConnection(0.7, 100), '4g'); // At threshold
+    assertEquals((api as any)._classifyConnection(2.0, 50), '4g'); // Well above threshold
+    assertEquals((api as any)._classifyConnection(10.0, 30), '4g'); // High bandwidth
 
     // Test edge cases
-    assertEquals((api as any)._classifyConnection(0, 100), 'slow-2g');
-    assertEquals((api as any)._classifyConnection(Infinity, 100), 'slow-2g');
-    assertEquals((api as any)._classifyConnection(5.0, 3000), 'slow-2g');
+    assertEquals((api as any)._classifyConnection(0, 100), 'slow-2g'); // Zero bandwidth
+    assertEquals((api as any)._classifyConnection(Infinity, 100), 'slow-2g'); // Infinite bandwidth (invalid)
+    assertEquals((api as any)._classifyConnection(5.0, 2500), 'slow-2g'); // High RTT overrides good bandwidth
+    assertEquals((api as any)._classifyConnection(NaN, 100), 'slow-2g'); // NaN bandwidth
+    assertEquals((api as any)._classifyConnection(0.8, 0), '4g'); // Very low RTT, good bandwidth
+
+    // Test boundary conditions precisely
+    assertEquals((api as any)._classifyConnection(0.05, 100), '2g'); // Exactly at slow-2g/2g boundary
+    assertEquals((api as any)._classifyConnection(0.07, 100), '3g'); // Exactly at 2g/3g boundary
+    assertEquals((api as any)._classifyConnection(0.1, 1400), '2g'); // Exactly at RTT boundary
+    assertEquals((api as any)._classifyConnection(0.1, 270), '3g'); // Exactly at RTT boundary
 
     api.dispose();
 });

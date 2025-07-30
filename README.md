@@ -16,7 +16,8 @@ not available.
   Cloudflare's infrastructure
 - ⚡ **Lightweight** - Less than **3kB** compressed transfer size
 - 🎯 **W3C Compliant** - Follows the official Network Information API
-  specification
+  specification (classification based on
+  [WICG/netinfo official spec](https://wicg.github.io/netinfo/))
 - 🔄 **Periodic Updates** - Optional continuous monitoring of network conditions
 - 🎛️ **Configurable** - Customizable measurement parameters
 
@@ -130,21 +131,26 @@ interface NetworkInformationConfig {
 
 ## Connection classifications
 
-The polyfill uses Firefox DevTools throttling classifications:
+The polyfill uses the official
+[WICG Network Information API specification](https://wicg.github.io/netinfo/)
+thresholds:
 
-| Type      | Downlink  | Uplink    | RTT   | Description          |
-| --------- | --------- | --------- | ----- | -------------------- |
-| `slow-2g` | 0.05 Mbps | 0.02 Mbps | 500ms | Very slow connection |
-| `2g`      | 0.25 Mbps | 0.05 Mbps | 300ms | Slow connection      |
-| `3g`      | 0.75 Mbps | 0.25 Mbps | 100ms | Moderate connection  |
-| `4g`      | 4+ Mbps   | 3+ Mbps   | 20ms  | Fast connection      |
+| Type      | Min RTT  | Max Downlink | Description                                   |
+| --------- | -------- | ------------ | --------------------------------------------- |
+| `slow-2g` | > 2000ms | < 50 kbps    | Very slow connection, text-only pages         |
+| `2g`      | > 1400ms | < 70 kbps    | Slow connection, small images                 |
+| `3g`      | > 270ms  | < 700 kbps   | Moderate connection, high-res images, audio   |
+| `4g`      | ≤ 270ms  | ≥ 700 kbps   | Fast connection, HD video, real-time features |
+
+_Classification uses OR logic: a connection is classified as the slowest
+category for which either the RTT OR downlink threshold is met._
 
 ## How It works
 
 1. **Detection**: Checks if native `navigator.connection` exists
 2. **Measurement**: Performs speed tests using Cloudflare's infrastructure
 3. **Classification**: Categorizes connection based on measured speed and
-   latency
+   latency using official WICG spec thresholds
 4. **Monitoring**: Optionally continues measuring at specified intervals
 5. **Events**: Dispatches `change` events when network conditions change
 

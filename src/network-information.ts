@@ -367,13 +367,16 @@ export class NetworkInformationApi extends EventTarget {
         downlinkMbps: number,
         rttMs: number,
     ): EffectiveConnectionType {
+        // Handle edge cases first
         if (downlinkMbps === 0 || !isFinite(downlinkMbps) || rttMs > 2_000) {
             return 'slow-2g';
         }
-        if (downlinkMbps < 0.15 || rttMs > 400) return 'slow-2g';
-        if (downlinkMbps < 0.65 || rttMs > 150) return '2g';
-        if (downlinkMbps < 4.5 || rttMs > 50) return '3g';
-        return '4g';
+
+        // Use official WICG spec thresholds for exact API compliance
+        if (downlinkMbps < 0.05 || rttMs > 1400) return 'slow-2g'; // < 50 kbps, RTT > 1400ms
+        if (downlinkMbps < 0.07 || rttMs > 270) return '2g'; // < 70 kbps, RTT > 270ms
+        if (downlinkMbps < 0.7) return '3g'; // < 700 kbps
+        return '4g'; // >= 700 kbps
     }
 
     /**
