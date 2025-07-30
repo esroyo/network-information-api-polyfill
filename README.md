@@ -139,8 +139,8 @@ thresholds:
 | --------- | -------- | ------------ | --------------------------------------------- |
 | `slow-2g` | > 2000ms | < 50 kbps    | Very slow connection, text-only pages         |
 | `2g`      | > 1400ms | < 70 kbps    | Slow connection, small images                 |
-| `3g`      | > 270ms  | < 700 kbps   | Moderate connection, high-res images, audio   |
-| `4g`      | ≤ 270ms  | ≥ 700 kbps   | Fast connection, HD video, real-time features |
+| `3g`      | > 270ms  | < 750 kbps   | Moderate connection, high-res images, audio   |
+| `4g`      | ≤ 270ms  | ≥ 750 kbps   | Fast connection, HD video, real-time features |
 
 _Classification uses OR logic: a connection is classified as the slowest
 category for which either the RTT OR downlink threshold is met._

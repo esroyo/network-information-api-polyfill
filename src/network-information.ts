@@ -375,8 +375,8 @@ export class NetworkInformationApi extends EventTarget {
         // Use official WICG spec thresholds for exact API compliance
         if (downlinkMbps < 0.05 || rttMs > 1400) return 'slow-2g'; // < 50 kbps, RTT > 1400ms
         if (downlinkMbps < 0.07 || rttMs > 270) return '2g'; // < 70 kbps, RTT > 270ms
-        if (downlinkMbps < 0.7) return '3g'; // < 700 kbps
-        return '4g'; // >= 700 kbps
+        if (downlinkMbps < 0.75) return '3g'; // < 750 kbps
+        return '4g'; // >= 750 kbps
     }
 
     /**

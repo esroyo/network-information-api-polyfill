@@ -82,12 +82,12 @@ Deno.test('NetworkInformationApi - Classification logic', () => {
     assertEquals((api as any)._classifyConnection(0.1, 500), '2g'); // Good bandwidth, high RTT
     assertEquals((api as any)._classifyConnection(0.06, 500), '2g'); // Both conditions
 
-    // 3g: < 0.7 Mbps (but not 2g or slow-2g)
+    // 3g: < 0.75 Mbps (but not 2g or slow-2g)
     assertEquals((api as any)._classifyConnection(0.5, 100), '3g'); // Below 700 kbps, good RTT
-    assertEquals((api as any)._classifyConnection(0.69, 50), '3g'); // Just under threshold
+    assertEquals((api as any)._classifyConnection(0.74, 50), '3g'); // Just under threshold
 
-    // 4g: >= 0.7 Mbps
-    assertEquals((api as any)._classifyConnection(0.7, 100), '4g'); // At threshold
+    // 4g: >= 0.75 Mbps
+    assertEquals((api as any)._classifyConnection(0.75, 100), '4g'); // At threshold
     assertEquals((api as any)._classifyConnection(2.0, 50), '4g'); // Well above threshold
     assertEquals((api as any)._classifyConnection(10.0, 30), '4g'); // High bandwidth
 
