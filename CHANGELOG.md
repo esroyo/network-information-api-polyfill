@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.1](https://github.com/esroyo/network-information-api-polyfill/compare/v0.3.0...v0.3.1) (2025-07-30)
+
+
+### Bug Fixes
+
+* adding a small 50 kbps buffer to the 3g/4g boundary (0.7 → 0.75 Mbps) ([df31e9d](https://github.com/esroyo/network-information-api-polyfill/commit/df31e9dc25f596c93e5221be5a68c7ed60b15d2c))
+
 ## [0.3.0](https://github.com/esroyo/network-information-api-polyfill/compare/v0.2.2...v0.3.0) (2025-07-30)
 
 
