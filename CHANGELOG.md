@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.0](https://github.com/esroyo/network-information-api-polyfill/compare/v0.2.2...v0.3.0) (2025-07-30)
+
+
+### Features
+
+* update classification with WICG/netinfo official spec ([5a9f42b](https://github.com/esroyo/network-information-api-polyfill/commit/5a9f42bd58a2822ff346d97edf85b3760e055b2b))
+
 ## [0.2.2](https://github.com/esroyo/network-information-api-polyfill/compare/v0.2.1...v0.2.2) (2025-07-29)
 
 

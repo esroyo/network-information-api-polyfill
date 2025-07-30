@@ -1,6 +1,6 @@
 {
     "name": "@esroyo/network-information-api-polyfill",
-    "version": "0.2.2",
+    "version": "0.3.0",
     "description": "A polyfill for the Network Information API with automatic and manual installation options",
     "exports": {
         ".": "./src/auto.ts",
