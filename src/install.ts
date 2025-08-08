@@ -17,17 +17,17 @@
  *
  * If you need to have a type declaration:
  * ```typescript
- * import type { NetworkInformationApi } from '@esroyo/network-information-api-polyfill';
+ * import type { NetworkInformation } from '@esroyo/network-information-api-polyfill';
  *
  * declare global {
  *     interface Navigator {
- *         connection?: NetworkInformationApi;
+ *         connection?: NetworkInformation;
  *     }
  * }
  * ```
  */
 import type { NetworkInformationConfig } from './types.ts';
-import { NetworkInformationApi } from './network-information.ts';
+import { NetworkInformation } from './network-information.ts';
 
 /**
  * Install the Network Information Api polyfill
@@ -51,9 +51,9 @@ import { NetworkInformationApi } from './network-information.ts';
  * ```
  */
 export function installNetworkInformationPolyfill(
-    options: NetworkInformationConfig = {},
-): NetworkInformationApi {
-    const polyfill = new NetworkInformationApi(options);
+    options: NetworkInformationConfig,
+): NetworkInformation {
+    const polyfill = new NetworkInformation(options);
 
     Object.defineProperty(navigator, 'connection', {
         value: polyfill,

@@ -1,4 +1,5 @@
 import type {
+    ConnectionClassification,
     ConnectionInfo,
     EffectiveConnectionType,
     NetworkChangeEventDetail,
@@ -11,14 +12,16 @@ import type {
 
 /**
  * Network Information Api implementation providing real-time network measurement
- *
- * Based on Firefox DevTools throttling classifications and W3C Network Information Api spec
+ * with configurable classification tables
  *
  * @example
  * ```typescript
- * const networkApi = new NetworkInformationApi({
+ * // Use default WICG classification
+ * import { CLASSIFICATION } from './classifications/wicg.ts';
+ * const networkApi = new NetworkInformation({
  *   measurementCount: 3,
  *   periodicMeasurement: true
+ *   classificationTable: CLASSIFICATION,
  * });
  *
  * networkApi.addEventListener('change', (event) => {
@@ -26,7 +29,7 @@ import type {
  * });
  * ```
  */
-export class NetworkInformationApi extends EventTarget {
+export class NetworkInformation extends EventTarget {
     protected readonly _cfOrigin: string;
     protected readonly _estimatedServerTime: number;
     protected readonly _estimatedHeaderFraction: number;
@@ -35,42 +38,27 @@ export class NetworkInformationApi extends EventTarget {
     protected readonly _measurementSizeMultiplier: number;
     protected readonly _periodicMeasurement: boolean;
     protected readonly _measurementInterval: number;
-
-    /** Network type classifications based on Firefox DevTools */
-    protected readonly _networkTypes: Record<
-        EffectiveConnectionType,
-        NetworkType
-    > = {
-        'slow-2g': {
-            downlink: 0.05,
-            uplink: 0.02,
-            rtt: 500,
-            effectiveType: 'slow-2g',
-        },
-        '2g': { downlink: 0.25, uplink: 0.05, rtt: 300, effectiveType: '2g' },
-        '3g': { downlink: 0.75, uplink: 0.25, rtt: 100, effectiveType: '3g' },
-        '4g': { downlink: 4, uplink: 3, rtt: 20, effectiveType: '4g' },
-    };
-
     protected readonly _fetch: typeof fetch;
+    protected readonly _classificationTable: ConnectionClassification[];
 
     protected _downlink?: number;
     protected _uplink?: number;
     protected _rtt?: number;
     protected _effectiveType?: EffectiveConnectionType;
     protected _saveData: boolean = false;
-    protected _type: string = 'unknown';
+    protected _type: NetworkType = 'unknown';
 
     protected _measuring: boolean = false;
     protected _lastMeasurement: number = 0;
     protected _periodicTimer?: number;
 
     /**
-     * Create a new NetworkInformationApi instance
+     * Create a new NetworkInformation instance
      * @param options Configuration options for the network measurement
+     * @param services Injectable services for testing
      */
     constructor(
-        options: NetworkInformationConfig = {},
+        options: NetworkInformationConfig,
         services: NetworkInformationServices = {},
     ) {
         super();
@@ -78,14 +66,13 @@ export class NetworkInformationApi extends EventTarget {
         // Apply configuration with defaults
         this._cfOrigin = options.cfOrigin ?? 'https://speed.cloudflare.com';
         this._estimatedServerTime = options.estimatedServerTime ?? 10;
-        this._estimatedHeaderFraction = options.estimatedHeaderFraction ??
-            0.005;
+        this._estimatedHeaderFraction = options.estimatedHeaderFraction ?? 0.005;
         this._measurementCount = options.measurementCount ?? 2;
         this._baseMeasurementSize = options.baseMeasurementSize ?? 100_000;
-        this._measurementSizeMultiplier = options.measurementSizeMultiplier ??
-            2;
+        this._measurementSizeMultiplier = options.measurementSizeMultiplier ?? 2;
         this._periodicMeasurement = options.periodicMeasurement ?? false;
         this._measurementInterval = options.measurementInterval ?? 30_000;
+        this._classificationTable = options.classificationTable;
 
         this._fetch = services.fetch ?? fetch.bind(null);
 
@@ -114,7 +101,7 @@ export class NetworkInformationApi extends EventTarget {
         return this._saveData;
     }
     /** Connection type */
-    get type(): string {
+    get type(): NetworkType {
         return this._type;
     }
 
@@ -358,7 +345,7 @@ export class NetworkInformationApi extends EventTarget {
     }
 
     /**
-     * Classify connection type based on speed and latency
+     * Classify connection type based on speed and latency using the configured table
      * @param downlinkMbps Downlink speed in Mbps
      * @param rttMs Round-trip time in milliseconds
      * @returns Effective connection type
@@ -368,15 +355,26 @@ export class NetworkInformationApi extends EventTarget {
         rttMs: number,
     ): EffectiveConnectionType {
         // Handle edge cases first
-        if (downlinkMbps === 0 || !isFinite(downlinkMbps) || rttMs > 2_000) {
-            return 'slow-2g';
+        if (!isFinite(downlinkMbps) || downlinkMbps <= 0 || !isFinite(rttMs) || rttMs < 0) {
+            // Return the slowest classification type
+            return this._classificationTable[0].type;
         }
 
-        // Use official WICG spec thresholds for exact API compliance
-        if (downlinkMbps < 0.05 || rttMs > 1400) return 'slow-2g'; // < 50 kbps, RTT > 1400ms
-        if (downlinkMbps < 0.07 || rttMs > 270) return '2g'; // < 70 kbps, RTT > 270ms
-        if (downlinkMbps < 0.75) return '3g'; // < 750 kbps
-        return '4g'; // >= 750 kbps
+        // Check each classification in order (slowest to fastest)
+        for (const classification of this._classificationTable) {
+            const exceedsDownlinkLimit = classification.maxDownlink !== undefined && 
+                                       downlinkMbps < classification.maxDownlink;
+            const exceedsRttLimit = classification.minRtt !== undefined && 
+                                  rttMs > classification.minRtt;
+
+            // Use OR logic: classify as this type if either condition is met
+            if (exceedsDownlinkLimit || exceedsRttLimit) {
+                return classification.type;
+            }
+        }
+
+        // If no limits are exceeded, return the fastest type (last in table)
+        return this._classificationTable[this._classificationTable.length - 1].type;
     }
 
     /**
@@ -506,7 +504,7 @@ export class NetworkInformationApi extends EventTarget {
     }
 
     /**
-     * Dispose of the NetworkInformationApi instance and cleanup resources
+     * Dispose of the NetworkInformation instance and cleanup resources
      * Call this when you no longer need the instance to prevent memory leaks
      */
     public dispose(): void {

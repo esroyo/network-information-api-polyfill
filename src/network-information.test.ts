@@ -1,10 +1,14 @@
-import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
+import { assertEquals, assertExists, assertInstanceOf, assertThrows } from '@std/assert';
 import { assertSpyCalls, returnsNext, spy, stub } from '@std/testing/mock';
 import { FakeTime } from '@std/testing/time';
 
-import { NetworkInformationApi as RealNetworkInformationApi } from './network-information.ts';
+import { NetworkInformation as RealNetworkInformation } from './network-information.ts';
+import { CLASSIFICATION as CLASSIFICATION_WICG } from './classifications/wicg.ts';
+import { CLASSIFICATION as CLASSIFICATION_FIREFOX } from './classifications/firefox.ts';
+import { CLASSIFICATION as CLASSIFICATION_CHROME } from './classifications/chrome.ts';
+import type { ConnectionClassification } from './types.ts';
 
-class NetworkInformationApi extends RealNetworkInformationApi {
+class NetworkInformation extends RealNetworkInformation {
     /** Avoid init on tests */
     protected override async _init(): Promise<void> {}
 }
@@ -33,9 +37,8 @@ const createFetchMock = (
     return fetchMock;
 };
 
-// Test Suite
-Deno.test('NetworkInformationApi - Constructor', () => {
-    const api = new NetworkInformationApi();
+Deno.test('NetworkInformation - Constructor with a classification', () => {
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG });
 
     assertInstanceOf(api, EventTarget);
     assertEquals(api.saveData, false);
@@ -45,20 +48,32 @@ Deno.test('NetworkInformationApi - Constructor', () => {
     assertEquals(api.rtt, undefined);
     assertEquals(api.effectiveType, undefined);
 
+    assertEquals((api as any)._classificationTable.length, 4);
+    assertEquals((api as any)._classificationTable[0].type, 'slow-2g');
+    assertEquals((api as any)._classificationTable[3].type, '4g');
+
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Constructor with options', () => {
-    const options = {
+Deno.test('NetworkInformation - Constructor with custom classification', () => {
+    const customTable: ConnectionClassification[] = [
+        { type: 'slow-2g', maxDownlink: 0.1, minRtt: 1000 },
+        { type: '2g', maxDownlink: 0.5, minRtt: 500 },
+        { type: '3g', maxDownlink: 2.0, minRtt: 200 },
+        { type: '4g' }
+    ];
+
+    const api = new NetworkInformation({
+        classificationTable: customTable,
         cfOrigin: 'https://custom.test.com',
         measurementCount: 5,
         baseMeasurementSize: 50000,
         periodicMeasurement: true,
-    };
+    });
 
-    const api = new NetworkInformationApi(options);
-
-    // Test that options are applied (accessing protected properties for testing)
+    assertEquals((api as any)._classificationTable.length, 4);
+    assertEquals((api as any)._classificationTable[0].maxDownlink, 0.1);
+    assertEquals((api as any)._classificationTable[0].minRtt, 1000);
     assertEquals((api as any)._cfOrigin, 'https://custom.test.com');
     assertEquals((api as any)._measurementCount, 5);
     assertEquals((api as any)._baseMeasurementSize, 50000);
@@ -67,85 +82,115 @@ Deno.test('NetworkInformationApi - Constructor with options', () => {
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Classification logic', () => {
-    const api = new NetworkInformationApi();
+// Test Suite - Classification Logic with Different Tables
+Deno.test('NetworkInformation - WICG Classification Logic', () => {
+    const api = new NetworkInformation({
+        classificationTable: CLASSIFICATION_WICG
+    });
 
-    // Test classification boundaries based on official WICG spec
-
-    // slow-2g: < 0.05 Mbps OR RTT > 1400ms
-    assertEquals((api as any)._classifyConnection(0.04, 100), 'slow-2g'); // Below bandwidth threshold
-    assertEquals((api as any)._classifyConnection(0.1, 1500), 'slow-2g'); // Above RTT threshold
-    assertEquals((api as any)._classifyConnection(0.04, 1500), 'slow-2g'); // Both conditions
-
-    // 2g: < 0.07 Mbps OR RTT > 270ms (but not slow-2g)
+    // WICG thresholds
+    assertEquals((api as any)._classifyConnection(0.04, 100), 'slow-2g'); // Below 50 kbps
+    assertEquals((api as any)._classifyConnection(0.1, 1500), 'slow-2g'); // Above 1400ms RTT
     assertEquals((api as any)._classifyConnection(0.06, 100), '2g'); // Below 70 kbps, good RTT
-    assertEquals((api as any)._classifyConnection(0.1, 500), '2g'); // Good bandwidth, high RTT
-    assertEquals((api as any)._classifyConnection(0.06, 500), '2g'); // Both conditions
-
-    // 3g: < 0.75 Mbps (but not 2g or slow-2g)
+    assertEquals((api as any)._classifyConnection(0.1, 500), '2g'); // Good bandwidth, high RTT (> 270ms)
     assertEquals((api as any)._classifyConnection(0.5, 100), '3g'); // Below 700 kbps, good RTT
-    assertEquals((api as any)._classifyConnection(0.74, 50), '3g'); // Just under threshold
-
-    // 4g: >= 0.75 Mbps
-    assertEquals((api as any)._classifyConnection(0.75, 100), '4g'); // At threshold
+    assertEquals((api as any)._classifyConnection(0.7, 100), '4g'); // At 700 kbps threshold
     assertEquals((api as any)._classifyConnection(2.0, 50), '4g'); // Well above threshold
-    assertEquals((api as any)._classifyConnection(10.0, 30), '4g'); // High bandwidth
+
+    api.dispose();
+});
+
+Deno.test('NetworkInformation - Firefox Classification Logic', () => {
+    const api = new NetworkInformation({
+        classificationTable: CLASSIFICATION_FIREFOX
+    });
+
+    // Firefox thresholds
+    assertEquals((api as any)._classifyConnection(0.04, 100), 'slow-2g'); // Below 50 kbps
+    assertEquals((api as any)._classifyConnection(0.1, 2100), 'slow-2g'); // Above 2000ms RTT
+    assertEquals((api as any)._classifyConnection(0.2, 100), '2g'); // Below 250 kbps, good RTT
+    assertEquals((api as any)._classifyConnection(0.5, 900), '2g'); // Good bandwidth, high RTT (> 800ms)
+    assertEquals((api as any)._classifyConnection(0.6, 100), '3g'); // Below 750 kbps, good RTT
+    assertEquals((api as any)._classifyConnection(1.0, 250), '3g'); // Good bandwidth, high RTT (> 200ms)
+    assertEquals((api as any)._classifyConnection(1.0, 100), '4g'); // Above all thresholds
+
+    api.dispose();
+});
+
+Deno.test('NetworkInformation - Chrome Classification Logic', () => {
+    const api = new NetworkInformation({
+        classificationTable: CLASSIFICATION_CHROME
+    });
+
+    // Chrome thresholds
+    assertEquals((api as any)._classifyConnection(0.04, 100), 'slow-2g'); // Below 50 kbps
+    assertEquals((api as any)._classifyConnection(0.1, 2100), 'slow-2g'); // Above 2000ms RTT
+    assertEquals((api as any)._classifyConnection(0.06, 100), '2g'); // Below 70 kbps, good RTT
+    assertEquals((api as any)._classifyConnection(0.1, 1500), '2g'); // Good bandwidth, high RTT (> 1400ms)
+    assertEquals((api as any)._classifyConnection(1.2, 100), '3g'); // Below 1.6 Mbps, good RTT
+    assertEquals((api as any)._classifyConnection(2.0, 350), '3g'); // Good bandwidth, high RTT (> 300ms)
+    assertEquals((api as any)._classifyConnection(2.0, 100), '4g'); // Above all thresholds
+
+    api.dispose();
+});
+
+// Test Suite - Custom Classification Edge Cases
+Deno.test('NetworkInformation - Custom classification edge cases', () => {
+    const customTable: ConnectionClassification[] = [
+        { type: 'slow-2g', maxDownlink: 0.1, minRtt: 1000 },
+        { type: '2g', maxDownlink: 0.5, minRtt: 500 },
+        { type: '3g', maxDownlink: 2.0, minRtt: 100 },
+        { type: '4g' }
+    ];
+
+    const api = new NetworkInformation({
+        classificationTable: customTable
+    });
 
     // Test edge cases
     assertEquals((api as any)._classifyConnection(0, 100), 'slow-2g'); // Zero bandwidth
-    assertEquals((api as any)._classifyConnection(Infinity, 100), 'slow-2g'); // Infinite bandwidth (invalid)
-    assertEquals((api as any)._classifyConnection(5.0, 2500), 'slow-2g'); // High RTT overrides good bandwidth
+    assertEquals((api as any)._classifyConnection(-1, 100), 'slow-2g'); // Negative bandwidth
+    assertEquals((api as any)._classifyConnection(Infinity, 100), 'slow-2g'); // Infinite bandwidth
     assertEquals((api as any)._classifyConnection(NaN, 100), 'slow-2g'); // NaN bandwidth
-    assertEquals((api as any)._classifyConnection(0.8, 0), '4g'); // Very low RTT, good bandwidth
+    assertEquals((api as any)._classifyConnection(1.0, -1), 'slow-2g'); // Negative RTT
+    assertEquals((api as any)._classifyConnection(1.0, Infinity), 'slow-2g'); // Infinite RTT
 
-    // Test boundary conditions precisely
-    assertEquals((api as any)._classifyConnection(0.05, 100), '2g'); // Exactly at slow-2g/2g boundary
-    assertEquals((api as any)._classifyConnection(0.07, 100), '3g'); // Exactly at 2g/3g boundary
-    assertEquals((api as any)._classifyConnection(0.1, 1400), '2g'); // Exactly at RTT boundary
-    assertEquals((api as any)._classifyConnection(0.1, 270), '3g'); // Exactly at RTT boundary
-
-    api.dispose();
-});
-
-Deno.test('NetworkInformationApi - Median calculation', () => {
-    const api = new NetworkInformationApi();
-
-    // Test odd length array
-    assertEquals((api as any)._median([1, 3, 5]), 3);
-
-    // Test even length array
-    assertEquals((api as any)._median([1, 2, 4, 5]), 3);
-
-    // Test single element
-    assertEquals((api as any)._median([42]), 42);
-
-    // Test two elements
-    assertEquals((api as any)._median([10, 20]), 15);
+    // Test OR logic - should classify as slowest category where either condition is met
+    assertEquals((api as any)._classifyConnection(0.05, 50), 'slow-2g'); // Low bandwidth, good RTT
+    assertEquals((api as any)._classifyConnection(1.0, 1200), 'slow-2g'); // Good bandwidth, high RTT
+    assertEquals((api as any)._classifyConnection(0.3, 300), '2g'); // Medium bandwidth, medium RTT
+    assertEquals((api as any)._classifyConnection(5.0, 50), '4g'); // High bandwidth, low RTT
 
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Pseudo random hash', () => {
-    const api = new NetworkInformationApi();
+Deno.test('NetworkInformation - Custom classification with measurements', () => {
+    const customTable: ConnectionClassification[] = [
+        { type: 'slow-2g', maxDownlink: 0.2, minRtt: 800 },
+        { type: '2g', maxDownlink: 1.0, minRtt: 400 },
+        { type: '3g', maxDownlink: 5.0, minRtt: 150 },
+        { type: '4g' }
+    ];
 
-    const hash1 = (api as any)._pseudoRandomHash(5);
-    const hash2 = (api as any)._pseudoRandomHash(5);
+    const api = new NetworkInformation({
+        classificationTable: customTable
+    });
 
-    assertEquals(hash1.length, 5);
-    assertEquals(hash2.length, 5);
+    // Set test values that would be different with WICG classification
+    (api as any)._updateNetworkProperties(0.8, 200, false);
 
-    // Should be different (extremely unlikely to be same)
-    assertEquals(hash1 === hash2, false);
-
-    // Test custom length
-    const hash3 = (api as any)._pseudoRandomHash(20);
-    assertEquals(hash3.length, 20);
+    assertEquals(api.effectiveType, '2g'); // Uses custom table
+    assertEquals(api.downlink, 0.8);
+    assertEquals(api.rtt, 200);
 
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Event dispatching', async () => {
-    const api = new NetworkInformationApi();
+Deno.test('NetworkInformation - Event dispatching with custom classification', async () => {
+    const api = new NetworkInformation({
+        classificationTable: CLASSIFICATION_FIREFOX
+    });
+
     let eventFired = false;
     let eventDetail: any = null;
 
@@ -155,11 +200,11 @@ Deno.test('NetworkInformationApi - Event dispatching', async () => {
     });
 
     const testData = {
-        downlink: 5.0,
-        uplink: 2.5,
-        rtt: 50,
-        effectiveType: '4g',
-        preliminary: true,
+        downlink: 0.3,
+        uplink: 0.15,
+        rtt: 100,
+        effectiveType: '2g',
+        preliminary: false,
     };
 
     (api as any)._dispatchNetworkEvent('change', testData);
@@ -168,35 +213,37 @@ Deno.test('NetworkInformationApi - Event dispatching', async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assertEquals(eventFired, true);
-    assertEquals(eventDetail.downlink, 5.0);
-    assertEquals(eventDetail.effectiveType, '4g');
-    assertEquals(eventDetail.preliminary, true);
+    assertEquals(eventDetail.effectiveType, '2g');
+    assertEquals(eventDetail.downlink, 0.3);
 
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - getConnectionInfo', () => {
-    const api = new NetworkInformationApi();
+Deno.test('NetworkInformation - Median calculation', () => {
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG });
 
-    // Set some test values
-    (api as any)._downlink = 3.5;
-    (api as any)._uplink = 1.75;
-    (api as any)._rtt = 75;
-    (api as any)._effectiveType = '3g';
-
-    const info = api.getConnectionInfo();
-
-    assertEquals(info.downlink, 3.5);
-    assertEquals(info.uplink, 1.75);
-    assertEquals(info.rtt, 75);
-    assertEquals(info.effectiveType, '3g');
-    assertEquals(info.saveData, false);
-    assertEquals(info.type, 'unknown');
+    assertEquals((api as any)._median([1, 3, 5]), 3);
+    assertEquals((api as any)._median([1, 2, 4, 5]), 3);
+    assertEquals((api as any)._median([42]), 42);
+    assertEquals((api as any)._median([10, 20]), 15);
 
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Measurement state management', async () => {
+Deno.test('NetworkInformation - Pseudo random hash', () => {
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG });
+
+    const hash1 = (api as any)._pseudoRandomHash(5);
+    const hash2 = (api as any)._pseudoRandomHash(5);
+
+    assertEquals(hash1.length, 5);
+    assertEquals(hash2.length, 5);
+    assertEquals(hash1 === hash2, false);
+
+    api.dispose();
+});
+
+Deno.test('NetworkInformation - Measurement state management', async () => {
     // Mock fetch to avoid real network calls
     const fetch = createFetchMock([
         new Response('test', {
@@ -204,7 +251,7 @@ Deno.test('NetworkInformationApi - Measurement state management', async () => {
         }),
     ]);
 
-    const api = new NetworkInformationApi(undefined, { fetch });
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG }, { fetch });
 
     assertEquals((api as any)._measuring, false);
 
@@ -218,7 +265,7 @@ Deno.test('NetworkInformationApi - Measurement state management', async () => {
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Concurrent measurement prevention', async () => {
+Deno.test('NetworkInformation - Concurrent measurement prevention', async () => {
     // Mock fetch to simulate slow network
     const fetch = createFetchMock([
         new Promise((resolve) =>
@@ -226,7 +273,7 @@ Deno.test('NetworkInformationApi - Concurrent measurement prevention', async () 
         ),
     ]);
 
-    const api = new NetworkInformationApi(undefined, { fetch });
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG }, { fetch });
 
     // Start first measurement
     const promise1 = api.measure();
@@ -243,10 +290,11 @@ Deno.test('NetworkInformationApi - Concurrent measurement prevention', async () 
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Periodic measurements', async () => {
+Deno.test('NetworkInformation - Periodic measurements', async () => {
     const time = new FakeTime();
 
-    const api = new NetworkInformationApi({
+    const api = new NetworkInformation({
+        classificationTable: CLASSIFICATION_WICG,
         periodicMeasurement: true,
         measurementInterval: 5000,
     });
@@ -268,11 +316,11 @@ Deno.test('NetworkInformationApi - Periodic measurements', async () => {
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Error handling in measurement', async () => {
+Deno.test('NetworkInformation - Error handling in measurement', async () => {
     // Mock fetch to throw error
     const fetch = createFetchMock([new Error('Network error')]);
 
-    const api = new NetworkInformationApi(undefined, { fetch });
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG }, { fetch });
 
     // Should not throw, should handle error silently
     await api.measure();
@@ -283,8 +331,8 @@ Deno.test('NetworkInformationApi - Error handling in measurement', async () => {
     api.dispose();
 });
 
-Deno.test('NetworkInformationApi - Update from measurements with empty array', () => {
-    const api = new NetworkInformationApi();
+Deno.test('NetworkInformation - Update from measurements with empty array', () => {
+    const api = new NetworkInformation({ classificationTable: CLASSIFICATION_WICG });
 
     // Should handle empty measurements array gracefully
     (api as any)._updateFromMeasurements([]);
@@ -300,13 +348,14 @@ Deno.test('NetworkInformationApi - Update from measurements with empty array', (
 
 // Integration test with real network (optional, requires --allow-net)
 Deno.test({
-    name: 'NetworkInformationApi - Real network integration',
+    name: 'NetworkInformation - Real network with Firefox classification',
     ignore: false, // Set to false to run real network tests
     permissions: { net: true },
     fn: async () => {
-        const api = new RealNetworkInformationApi({
+        const api = new RealNetworkInformation({
             measurementCount: 1,
             baseMeasurementSize: 1000, // Small size for faster test
+            classificationTable: CLASSIFICATION_FIREFOX
         });
 
         // Wait for initial measurement

@@ -4,5 +4,6 @@ if (
     typeof window !== 'undefined' && typeof navigator !== 'undefined' &&
     (!('connection' in navigator) || !navigator.connection)
 ) {
-    installNetworkInformationPolyfill();
+    const { CLASSIFICATION } = await import('./classifications/wicg.ts');
+    installNetworkInformationPolyfill({ classificationTable: CLASSIFICATION });
 }

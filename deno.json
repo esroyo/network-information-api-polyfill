@@ -4,7 +4,11 @@
     "description": "A polyfill for the Network Information API with automatic and manual installation options",
     "exports": {
         ".": "./src/auto.ts",
-        "./pure": "./src/mod.ts"
+        "./pure": "./src/mod.ts",
+        "./network-information": "./src/network-information.ts",
+        "./classifications/chrome": "./src/classifications/chrome.ts",
+        "./classifications/firefox": "./src/classifications/firefox.ts",
+        "./classifications/wicg": "./src/classifications/wicg.ts"
     },
     "tasks": {
         "dev": "deno test --watch",
