@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.0](https://github.com/esroyo/network-information-api-polyfill/compare/v0.3.1...v0.4.0) (2025-08-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* avoid ES6 class for better minification
+* make classifications configurable
+
+### Features
+
+* avoid ES6 class for better minification ([76bee9e](https://github.com/esroyo/network-information-api-polyfill/commit/76bee9ebd9e6038c5f8f9400038a74911bae3820))
+* make classifications configurable ([7800fad](https://github.com/esroyo/network-information-api-polyfill/commit/7800fad7d8de2202b8ca640b63554f9afe9d978b))
+
 ## [0.3.1](https://github.com/esroyo/network-information-api-polyfill/compare/v0.3.0...v0.3.1) (2025-07-30)
 
 
