@@ -8,26 +8,26 @@
  * // Just import to auto-install
  * import '@esroyo/network-information-api-polyfill';
  *
- * // For TypeScript support, also you may import the type declarations:
- * import '@esroyo/network-information-api-polyfill/global';
- *
  * // Now available on navigator with proper typing
  * console.log(navigator.connection?.effectiveType);
  * ```
  *
  * If you need to have a type declaration:
  * ```typescript
- * import type { NetworkInformation } from '@esroyo/network-information-api-polyfill';
+ * import type { NetworkInformationLike } from '@esroyo/network-information-api-polyfill';
  *
  * declare global {
  *     interface Navigator {
- *         connection?: NetworkInformation;
+ *         connection?: NetworkInformationLike;
  *     }
  * }
  * ```
  */
-import type { NetworkInformationConfig } from './types.ts';
-import { NetworkInformation } from './network-information.ts';
+import type {
+    NetworkInformationConfig,
+    NetworkInformationLike,
+} from './types.ts';
+import { createNetworkInformation } from './network-information.ts';
 
 /**
  * Install the Network Information Api polyfill
@@ -40,7 +40,10 @@ import { NetworkInformation } from './network-information.ts';
  *
  * @example
  * ```typescript
+ * import CLASSIFICATION_FIREFOX from '@esroyo/network-information-api-polyfill/classifications/firefox';
+ *
  * const connection = installNetworkInformationPolyfill({
+ *   classificationTable: CLASSIFICATION_FIREFOX,
  *   measurementCount: 3,
  *   periodicMeasurement: true
  * });
@@ -52,8 +55,8 @@ import { NetworkInformation } from './network-information.ts';
  */
 export function installNetworkInformationPolyfill(
     options: NetworkInformationConfig,
-): NetworkInformation {
-    const polyfill = new NetworkInformation(options);
+): NetworkInformationLike {
+    const polyfill = createNetworkInformation(options);
 
     Object.defineProperty(navigator, 'connection', {
         value: polyfill,

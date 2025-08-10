@@ -4,157 +4,81 @@
 [![JSR Score](https://jsr.io/badges/@esroyo/network-information-api-polyfill/score)](https://jsr.io/@esroyo/network-information-api-polyfill)
 [![codecov](https://codecov.io/gh/esroyo/network-information-api-polyfill/graph/badge.svg?token=YO7XY0TDX5)](https://codecov.io/gh/esroyo/network-information-api-polyfill)
 
-A polyfill for the
-[W3C Network Information API](https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API)
-that provides real-time network connection information when the native API is
-not available.
+A polyfill for the [W3C Network Information API](https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API) that provides real-time network connection information when the native API is not available.
 
 ## Features
 
-- 🚀 **Automatic Installation** - Just import and use with WICG classification
-- 📊 **Real-time Measurements** - Active network speed testing using Cloudflare's infrastructure
-- ⚡ **Lightweight** - Less than **3kB** compressed, tree-shakeable classifications
-- 🎯 **Multiple Classification Standards** - Choose between WICG, Firefox DevTools, Chrome DevTools, or custom tables
-- 🌳 **Tree-shakeable** - Import only the classification tables you need
-- 🔧 **Fully Configurable** - Customize classification thresholds and measurement parameters
-- 🔄 **Periodic Updates** - Optional continuous monitoring of network conditions
+- 🚀 **Automatic installation** - Just import and use with WICG classification
+- 📊 **Real-time measurements** - Active network speed testing using Cloudflare's infrastructure
+- ⚡ **Lightweight** - Less than **2kB** minified and compressed
+- 🎯 **Multiple classification standards** - WICG, Firefox DevTools, Chrome DevTools, or custom
+- 🌳 **Tree-shakeable** - Import only what you need
+- 🔧 **Fully configurable** - Customize thresholds and measurement parameters
 
-## Try it right now (🚀 no installation!)
+## Quick start
 
-### Check the [live playground](https://esroyo.github.io/network-information-api-polyfill/) 👉
+### Try it now (no installation!)
+**[Live playground](https://esroyo.github.io/network-information-api-polyfill/) →**
 
-Or manually test in your browser console in 2 seconds:
-
+Or test in browser console:
 ```javascript
-import('https://esm.sh/jsr/@esroyo/network-information-api-polyfill').then(
-    () => {
-        // Listen for changes
-        navigator.connection?.addEventListener('change', (e) => {
-            console.log('🔄 Network changed:', e.detail);
-        });
-    },
-);
+import('https://esm.sh/jsr/@esroyo/network-information-api-polyfill').then(() => {
+    navigator.connection?.addEventListener('change', (e) => {
+        console.log('🔄 Network changed:', e.detail);
+    });
+});
 ```
 
-Open DevTools → Console → Paste → Enter → Magic! ✨
+### Installation
 
-## Installation
-
-### Automatic polyfilling (includes WICG classification)
-
+**Automatic (recommended for most users):**
 ```typescript
 import '@esroyo/network-information-api-polyfill';
+
+// Now available on navigator
+navigator.connection?.addEventListener('change', (event) => {
+    console.log('Network:', event.detail.effectiveType, event.detail.downlink + 'Mbps');
+});
 ```
 
-### Manual installation with tree-shaking
-
+**Manual with tree-shaking:**
 ```typescript
-import { NetworkInformation } from '@esroyo/network-information-api-polyfill/pure';
-// Only import the classification tables you need
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/firefox';
+import { installNetworkInformationPolyfill } from '@esroyo/network-information-api-polyfill/pure';
+import CLASSIFICATION_FIREFOX from '@esroyo/network-information-api-polyfill/classifications/firefox';
 
-const api = new NetworkInformation({
-    classificationTable: CLASSIFICATION, // Required for manual installation
+installNetworkInformationPolyfill({
+    classificationTable: CLASSIFICATION_FIREFOX,
     measurementCount: 3,
     periodicMeasurement: true
 });
 ```
 
-## Usage Examples
-
-### Basic usage (automatic polyfill with WICG classification)
-
+**Standalone instance:**
 ```typescript
-// Auto-install with default WICG classification
-import '@esroyo/network-information-api-polyfill';
+import { createNetworkInformation } from '@esroyo/network-information-api-polyfill/network-information';
+import CLASSIFICATION_CHROME from '@esroyo/network-information-api-polyfill/classifications/chrome';
 
-// Now available on navigator
-navigator.connection?.addEventListener('change', (event) => {
-    console.log('Network changed:', {
-        effectiveType: event.detail.effectiveType, // '4g', '3g', '2g', 'slow-2g'
-        downlink: event.detail.downlink,           // Mbps
-        rtt: event.detail.rtt,                     // milliseconds
-    });
-});
-```
-
-### Manual usage with different classification standards
-
-```typescript
-import { NetworkInformation } from '@esroyo/network-information-api-polyfill/pure';
-// Tree-shakeable imports - only bundle what you use
-import { CLASSIFICATION as CLASSIFICATION_FIREFOX } from '@esroyo/network-information-api-polyfill/classifications/firefox';
-import { CLASSIFICATION as CLASSIFICATION_CHROME } from '@esroyo/network-information-api-polyfill/classifications/chrome';
-
-// Firefox DevTools classification
-const firefoxApi = new NetworkInformation({
-    classificationTable: CLASSIFICATION_FIREFOX, // Must specify classification
+const networkApi = createNetworkInformation({
+    classificationTable: CLASSIFICATION_CHROME,
     periodicMeasurement: true
 });
 
-// Chrome DevTools classification  
-const chromeApi = new NetworkInformation({
-    classificationTable: CLASSIFICATION_CHROME, // Must specify classification
-    measurementCount: 1 // Minimal overhead
+networkApi.addEventListener('change', (event) => {
+    console.log('Network changed:', event.detail);
 });
 ```
 
-### Custom classification for specific use cases
+## ⚠️ DevTools throttling limitation
 
-```typescript
-import { NetworkInformation } from '@esroyo/network-information-api-polyfill/pure';
+**This polyfill may not reflect throttled speeds when using browser DevTools network throttling.**
 
-// Gaming-focused classification (latency matters more)
-const gamingApi = new NetworkInformation({
-    classificationTable: [
-        {
-            type: 'slow-2g',
-            maxDownlink: 0.5,    // 500 kbps
-            minRtt: 200,         // 200ms - too high for gaming
-            description: 'Unplayable'
-        },
-        {
-            type: '2g',
-            maxDownlink: 2.0,    // 2 Mbps
-            minRtt: 100,         // 100ms - playable but not ideal
-            description: 'Basic gaming'
-        },
-        {
-            type: '3g',
-            maxDownlink: 10.0,   // 10 Mbps
-            minRtt: 50,          // 50ms - good for most games
-            description: 'Good gaming'
-        },
-        {
-            type: '4g',
-            description: 'Competitive ready'
-        }
-    ],
-    measurementCount: 1
-});
-```
+DevTools throttling is applied synthetically, but this polyfill uses the **Performance Resource Timing API** which reports actual network timings, not artificial throttling.
 
-## Tree-shakeable Classifications
+**For accurate testing:** Use real mobile networks, network-level throttling, or deploy to staging environments.
 
-Import only what you need to keep bundle size minimal:
-
-```typescript
-// Option 1: Auto-install (includes WICG classification - ~2.5kB)
-import '@esroyo/network-information-api-polyfill';
-
-// Option 2: Manual with specific classification (~2.0kB + classification)
-import { NetworkInformation } from '@esroyo/network-information-api-polyfill/pure';
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/firefox';
-
-const api = new NetworkInformation({ 
-    classificationTable: CLASSIFICATION // Required parameter
-});
-```
-
-## API Reference
+## API reference
 
 ### Properties
-
 - `downlink`: Downlink speed in Mbps
 - `uplink`: Uplink speed in Mbps (estimated)
 - `rtt`: Round-trip time in milliseconds
@@ -163,208 +87,69 @@ const api = new NetworkInformation({
 - `type`: Connection type (always `'unknown'` in polyfill)
 
 ### Methods
-
 - `measure()`: Manually trigger a network measurement
 - `getConnectionInfo()`: Get current connection information
 - `dispose()`: Clean up resources and stop periodic measurements
+- `addEventListener()` / `removeEventListener()`: Event handling
 
 ### Configuration
-
 ```typescript
 interface NetworkInformationConfig {
-    classificationTable: ConnectionClassification[]; // Required - no default
-    cfOrigin?: string; // Cloudflare origin (default: 'https://speed.cloudflare.com')
-    estimatedServerTime?: number; // Server processing time in ms (default: 10)
-    estimatedHeaderFraction?: number; // Header size fraction (default: 0.005)
-    measurementCount?: number; // Number of measurements (default: 2)
-    baseMeasurementSize?: number; // Base measurement size in bytes (default: 100000)
-    measurementSizeMultiplier?: number; // Size multiplier (default: 2)
-    periodicMeasurement?: boolean; // Enable periodic re-measurement (default: false)
-    measurementInterval?: number; // Interval between measurements in ms (default: 30000)
+    classificationTable: ConnectionClassification[]; // Required
+    cfOrigin?: string; // Default: 'https://speed.cloudflare.com'
+    measurementCount?: number; // Default: 2
+    baseMeasurementSize?: number; // Default: 100000 bytes
+    measurementSizeMultiplier?: number; // Default: 2
+    periodicMeasurement?: boolean; // Default: false
+    measurementInterval?: number; // Default: 30000ms
+    estimatedServerTime?: number; // Default: 10ms
+    estimatedHeaderFraction?: number; // Default: 0.005
 }
 ```
 
-## Installation Methods Compared
+## Classification standards
 
-### Automatic Polyfill (Recommended for most users)
+### WICG (Default)
+Based on the [official specification](https://wicg.github.io/netinfo/):
 
+| Type      | Max Downlink | Min RTT   | Description                  |
+| --------- | ------------ | --------- | ---------------------------- |
+| `slow-2g` | < 50 kbps    | > 1400ms  | Very slow connection         |
+| `2g`      | < 70 kbps    | > 270ms   | Slow connection              |
+| `3g`      | < 700 kbps   | -         | Moderate connection          |
+| `4g`      | -            | -         | Fast connection              |
+
+### Firefox DevTools / Chrome DevTools
 ```typescript
-import '@esroyo/network-information-api-polyfill';
+import CLASSIFICATION_FIREFOX from '@esroyo/network-information-api-polyfill/classifications/firefox';
+import CLASSIFICATION_CHROME from '@esroyo/network-information-api-polyfill/classifications/chrome';
 ```
 
-**Pros:**
-- Zero configuration
-- Works immediately on `navigator.connection`
-- Uses standard WICG classification
-- ~2.5kB total bundle size
+Different thresholds based on browser DevTools standards. See the [classification files](./src/classifications/) for detailed specifications.
 
-**Cons:**
-- Always includes WICG classification (can't be tree-shaken)
-- Less control over configuration
-
-### Manual Installation (Recommended for bundle optimization)
-
+### Custom classifications
 ```typescript
-import { installNetworkInformationPolyfill } from '@esroyo/network-information-api-polyfill/pure';
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/firefox';
-
-const connection = installNetworkInformationPolyfill({
-    classificationTable: CLASSIFICATION, // Required
-    measurementCount: 3,
-    periodicMeasurement: true
-});
+const customClassification = [
+    { type: 'slow-2g', maxDownlink: 0.1, minRtt: 1000 },
+    { type: '2g', maxDownlink: 0.5, minRtt: 500 },
+    { type: '3g', maxDownlink: 2.0, minRtt: 200 },
+    { type: '4g' }
+];
 ```
 
-**Pros:**
-- Full control over configuration
-- Tree-shakeable classifications
-- Smaller bundle when using custom classification
-- Can choose specific classification standard
+## Performance tips
 
-**Cons:**
-- Must explicitly specify classification
-- Slightly more verbose setup
+- Use `measurementCount: 1` for minimal bandwidth usage
+- Call `dispose()` to prevent memory leaks
+- Balance accuracy vs. resource usage with appropriate intervals
 
-### Direct Class Usage (Maximum flexibility)
+## Browser compatibility
 
-```typescript
-import { NetworkInformation } from '@esroyo/network-information-api-polyfill/pure';
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/chrome';
-
-const networkApi = new NetworkInformation({
-    classificationTable: CLASSIFICATION, // Required
-    periodicMeasurement: true
-});
-
-// Manual event handling
-networkApi.addEventListener('change', (event) => {
-    console.log('Network changed:', event.detail);
-});
-```
-
-**Pros:**
-- Multiple instances with different configurations
-- Full event control
-- No `navigator` modification
-- Smallest possible bundle size
-
-**Cons:**
-- Manual instance management
-- Must call `dispose()` to prevent memory leaks
-
-## Classification Standards
-
-### WICG (Auto-install default) - 0.5kB
-Based on the official [WICG Network Information API specification](https://wicg.github.io/netinfo/):
-
-| Type      | Max Downlink | Min RTT   | Description                                   |
-| --------- | ------------ | --------- | --------------------------------------------- |
-| `slow-2g` | < 50 kbps    | > 1400ms  | Very slow connection, text-only               |
-| `2g`      | < 70 kbps    | > 270ms   | Slow connection, small images                 |
-| `3g`      | < 700 kbps   | -         | Moderate connection, high-res images, audio   |
-| `4g`      | -            | -         | Fast connection, HD video, real-time features |
-
-### Firefox DevTools - 0.5kB
-```typescript
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/firefox';
-```
-
-Based on [Firefox DevTools throttling](https://github.com/mozilla-firefox/firefox/blob/main/devtools/docs/user/network_monitor/throttling/index.rst):
-
-| Type      | Max Downlink | Min RTT   | Description                     |
-| --------- | ------------ | --------- | ------------------------------- |
-| `slow-2g` | < 50 kbps    | > 2000ms  | GPRS (50 kbps, 2000ms RTT)      |
-| `2g`      | < 250 kbps   | > 800ms   | Regular 2G (250 kbps, 800ms RTT) |
-| `3g`      | < 750 kbps   | > 200ms   | Regular 3G (750 kbps, 200ms RTT) |
-| `4g`      | -            | -         | Good 3G+ (1.5+ Mbps, 40ms RTT)   |
-
-### Chrome DevTools - 0.5kB
-```typescript
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/chrome';
-```
-
-Based on Chrome DevTools throttling (similar to Lighthouse):
-
-| Type      | Max Downlink | Min RTT   | Description                      |
-| --------- | ------------ | --------- | -------------------------------- |
-| `slow-2g` | < 50 kbps    | > 2000ms  | Slow 2G (50 kbps, 2000ms RTT)   |
-| `2g`      | < 70 kbps    | > 1400ms  | 2G (70 kbps, 1400ms RTT)        |
-| `3g`      | < 1.6 Mbps   | > 300ms   | Regular 3G (1.6 Mbps, 300ms RTT) |
-| `4g`      | -            | -         | Regular 4G+ (9+ Mbps, 170ms RTT) |
-
-## Bundle Size Optimization Strategy
-
-### Why Classification is Required for Manual Usage
-
-The library is designed for optimal bundle size through tree-shaking:
-
-```typescript
-// ❌ If we provided defaults, this would always bundle WICG classification
-const api = new NetworkInformation(); // Hidden ~0.5kB overhead
-
-// ✅ Explicit choice = only bundle what you use
-import { CLASSIFICATION } from './classifications/firefox'; // Exactly 0.5kB
-const api = new NetworkInformation({ classificationTable: CLASSIFICATION });
-```
-
-### Bundle Size Comparison
-
-| Configuration | Bundle Size | What's Included |
-|---------------|-------------|-----------------|
-| Auto-install | ~2.5kB | Core + WICG classification |
-| Manual + Firefox | ~2.5kB | Core + Firefox classification only |
-| Manual + Chrome | ~2.5kB | Core + Chrome classification only |
-| Manual + Custom | ~2.0kB | Core + your custom rules |
-| Multiple classifications | +0.5kB each | Only if you import multiple |
-
-### Tree-shaking Best Practices
-
-```typescript
-// ✅ Optimal - Only bundles Firefox classification
-import { NetworkInformation } from '@esroyo/network-information-api-polyfill/pure';
-import { CLASSIFICATION } from '@esroyo/network-information-api-polyfill/classifications/firefox';
-
-const api = new NetworkInformation({
-    classificationTable: CLASSIFICATION
-});
-
-// ❌ Avoid - Bundles all classifications even if unused
-import * as Classifications from '@esroyo/network-information-api-polyfill/classifications';
-```
-
-## Performance Considerations
-
-- **Measurement Overhead**: Use `measurementCount: 1` for minimal bandwidth usage
-- **Memory Usage**: Call `dispose()` when done to clean up timers and listeners
-- **Periodic Updates**: Balance accuracy vs. resource usage with appropriate intervals
-- **Classification Complexity**: Custom tables with many rules have minimal impact (~0.1kB per rule)
-
-### Choosing the Right Installation Method
-
-| Use Case | Recommended Method | Bundle Impact | Reason |
-|----------|-------------------|---------------|---------|
-| Quick prototyping | Auto-install | 2.5kB | Zero config, works immediately |
-| Production apps | Manual install | 2.0-2.5kB | Control over classification choice |
-| Firefox extensions | Manual + Firefox | 2.5kB | Matches Firefox DevTools behavior |
-| Chrome extensions | Manual + Chrome | 2.5kB | Matches Chrome DevTools behavior |
-| Gaming apps | Manual + Custom | 2.0kB | Gaming-specific latency thresholds |
-| Multiple instances | Direct class usage | 2.0-2.5kB | Maximum flexibility |
-
-## Browser Compatibility
-
-- ✅ Modern browsers with fetch API support
-- ⚠️ Requires HTTPS for accurate measurements
-- 🔧 Works in Node.js with appropriate fetch polyfill
-- 📱 Mobile browsers supported
+Modern browsers with fetch API support.
 
 ## Contributing
 
-We welcome contributions, especially:
-
-- **New Classification Standards**: Add support for other throttling standards
-- **Bundle Size Optimizations**: Further reduce footprint
-- **Performance Improvements**: Enhance measurement accuracy
-- **Documentation**: Improve examples and use cases
+Contributions welcome! Especially new classification standards, bundle optimizations, and performance improvements.
 
 ## License
 
