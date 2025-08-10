@@ -10,7 +10,7 @@ A polyfill for the [W3C Network Information API](https://developer.mozilla.org/e
 
 - 🚀 **Automatic installation** - Just import and use with WICG classification
 - 📊 **Real-time measurements** - Active network speed testing using Cloudflare's infrastructure
-- ⚡ **Lightweight** - Less than **2kB** minified and compressed
+- ⚡ **Lightweight** - Less than **3kB** minified and compressed
 - 🎯 **Multiple classification standards** - WICG, Firefox DevTools, Chrome DevTools, or custom
 - 🌳 **Tree-shakeable** - Import only what you need
 - 🔧 **Fully configurable** - Customize thresholds and measurement parameters
