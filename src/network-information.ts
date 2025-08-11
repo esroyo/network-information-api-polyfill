@@ -268,7 +268,9 @@ export function createNetworkInformation(
         uid: string,
         measurementSize: number,
         index: number,
-    ): Promise<{ mbps: number; networkTime: number; totalTime: number } | null> => {
+    ): Promise<
+        { mbps: number; networkTime: number; totalTime: number } | null
+    > => {
         const startTime = performance.now();
         const response = await fetch(
             createMeasurementUrl(uid, measurementSize, index),
