@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.5.0](https://github.com/esroyo/network-information-api-polyfill/compare/v0.4.0...v0.5.0) (2025-08-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename option `cfOrigin` to simply `origin`
+
+### Other
+
+* correct minified/compressed size ([ac03ac0](https://github.com/esroyo/network-information-api-polyfill/commit/ac03ac097aad5636d0740cf45c7b78e85e6f1e3a))
+* rename option `cfOrigin` to simply `origin` ([aa47e05](https://github.com/esroyo/network-information-api-polyfill/commit/aa47e050b898dfd0e90e99eed152893d80df6500))
+
 ## [0.4.0](https://github.com/esroyo/network-information-api-polyfill/compare/v0.3.1...v0.4.0) (2025-08-10)
 
 
