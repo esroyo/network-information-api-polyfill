@@ -166,8 +166,8 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="cfOrigin">Cloudflare Origin URL</label>
-                <input type="text" id="cfOrigin" name="cfOrigin" value="https://speed.cloudflare.com">
+                <label for="origin">Origin URL (Cloudflare like)</label>
+                <input type="text" id="origin" name="origin" value="https://speed.cloudflare.com">
             </div>
             <div class="form-group hidden">
                 <label for="estimatedServerTime">Estimated Server Time (ms)</label>
@@ -309,7 +309,7 @@
                 }
             };
 
-            addProp('cfOrigin', 'string');
+            addProp('origin', 'string');
             addProp('estimatedServerTime', 'int');
             addProp('estimatedHeaderFraction', 'float');
             addProp('measurementCount', 'int');

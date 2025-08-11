@@ -29,8 +29,8 @@ export interface NetworkMeasurement {
 
 /** Configuration options for NetworkInformation */
 export interface NetworkInformationConfig {
-    /** Cloudflare origin URL for speed tests */
-    cfOrigin?: string;
+    /** Origin URL for speed tests (Cloudflare like) */
+    origin?: string;
     /** Estimated server processing time in milliseconds */
     estimatedServerTime?: number;
     /** Estimated fraction of data that is headers */

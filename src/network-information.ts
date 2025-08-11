@@ -63,242 +63,6 @@ export const _pseudoRandomHash = (length: number = 7): string => {
 };
 
 /**
- * Extract server processing time from response headers
- * @param res Fetch response object
- * @returns Server time in milliseconds or null
- */
-export const _getServerTimeFromResponse = (res: Response): number | null => {
-    const serverTiming = res.headers.get('server-timing');
-    if (serverTiming) {
-        const match = serverTiming.match(/.*dur=([0-9.]+)/);
-        if (match) return +match[1];
-    }
-    return null;
-};
-
-/**
- * Dispatch a network change event
- * @param type Event type
- * @param data Event data
- */
-export const _dispatchNetworkEvent = <T extends EventTarget>(
-    target: T,
-    eventType: string,
-    data: NetworkChangeEventDetail = {},
-): void => {
-    target.dispatchEvent(new CustomEvent(eventType, { detail: data }));
-};
-
-/**
- * Check if measurement can be performed
- */
-export const _canPerformMeasurement = (
-    measuring: boolean,
-    lastMeasurement: number,
-    measurementInterval: number,
-): boolean => {
-    return !measuring &&
-        Date.now() - lastMeasurement > measurementInterval;
-};
-
-/**
- * Create measurement URL for given parameters
- */
-export const _createMeasurementUrl = (
-    cfOrigin: string,
-    uid: string,
-    bytes: number,
-    index: number,
-): string => {
-    return `${cfOrigin}/__down?measId=${uid}&bytes=${bytes}&i=${index}`;
-};
-
-/**
- * Build timing information from fetch response
- * @param res Fetch response object
- * @returns Timing data or null if unavailable
- */
-export const _buildTiming = (
-    options: Required<
-        Pick<
-            NetworkInformationConfig,
-            'estimatedServerTime' | 'estimatedHeaderFraction'
-        >
-    >,
-    res: Response,
-    startTime?: number,
-    endTime?: number,
-): {
-    ping: number;
-    bps: number;
-    duration: number;
-    perf?: PerformanceResourceTiming;
-} | null => {
-    const perf = performance.getEntriesByType('resource')
-        .find((p) => p.name === res.url) as PerformanceResourceTiming;
-
-    let url: URL;
-    let numBytes: number;
-    try {
-        url = new URL(res.url);
-        numBytes = parseInt(url.searchParams.get('bytes') || '0', 10);
-    } catch {
-        numBytes = 0;
-    }
-    const serverTime = _getServerTimeFromResponse(res) ||
-        options.estimatedServerTime;
-
-    let ping: number;
-    let networkDuration: number;
-    let transferSize: number;
-
-    if (perf) {
-        const ttfb = perf.responseStart - perf.requestStart;
-        const payloadDownloadTime = perf.responseEnd - perf.responseStart;
-
-        ping = Math.max(0.01, ttfb - serverTime);
-        networkDuration = ping + payloadDownloadTime;
-        transferSize = perf.transferSize ||
-            (numBytes * (1 + options.estimatedHeaderFraction));
-    } else if (startTime !== undefined && endTime !== undefined) {
-        const totalDuration = endTime - startTime;
-        networkDuration = Math.max(1, totalDuration - serverTime);
-
-        ping = numBytes === 0
-            ? Math.max(1, networkDuration * 0.9)
-            : Math.min(networkDuration * 0.3, 200);
-
-        transferSize = numBytes * (1 + options.estimatedHeaderFraction);
-    } else {
-        return null;
-    }
-
-    const bits = 8 * transferSize;
-    const downloadTime = numBytes === 0
-        ? 0
-        : Math.max(1, networkDuration - ping);
-    const bps = numBytes === 0 ? 0 : bits / (downloadTime / 1_000);
-
-    return {
-        ping,
-        bps,
-        duration: networkDuration,
-        perf: perf || undefined,
-    };
-};
-
-/**
- * Perform latency measurement
- */
-export const _measureLatency = async (
-    options: Required<
-        Pick<
-            NetworkInformationConfig,
-            'cfOrigin' | 'estimatedServerTime' | 'estimatedHeaderFraction'
-        >
-    >,
-    { fetch }: Required<Pick<NetworkInformationServices, 'fetch'>>,
-    uid: string,
-    index: number,
-): Promise<{ ping: number } | null> => {
-    const startTime = performance.now();
-    const response = await fetch(
-        _createMeasurementUrl(options.cfOrigin, uid, 0, index),
-    );
-    await response.text();
-    const endTime = performance.now();
-
-    const timing = _buildTiming(options, response, startTime, endTime);
-    return timing ? { ping: timing.ping } : null;
-};
-
-/**
- * Perform download measurement
- */
-export const _measureDownload = async (
-    options: Required<
-        Pick<
-            NetworkInformationConfig,
-            'cfOrigin' | 'estimatedServerTime' | 'estimatedHeaderFraction'
-        >
-    >,
-    { fetch }: Required<Pick<NetworkInformationServices, 'fetch'>>,
-    uid: string,
-    measurementSize: number,
-    index: number,
-): Promise<{ mbps: number; networkTime: number; totalTime: number } | null> => {
-    const startTime = performance.now();
-    const response = await fetch(
-        _createMeasurementUrl(options.cfOrigin, uid, measurementSize, index),
-    );
-    await response.text();
-    const endTime = performance.now();
-    const totalTime = endTime - startTime;
-
-    const serverTime = _getServerTimeFromResponse(response) ||
-        options.estimatedServerTime;
-    const networkTime = Math.max(1, totalTime - serverTime);
-    const bits = 8 * (measurementSize * (1 + options.estimatedHeaderFraction));
-    const bps = bits / (networkTime / 1_000);
-    const mbps = bps / 1_000_000;
-
-    return { mbps, networkTime, totalTime };
-};
-
-/**
- * Perform a single measurement
- * @returns A network measurement
- */
-export const _performSingleMeasurement = async (
-    { cfOrigin, estimatedHeaderFraction, estimatedServerTime }: Required<
-        Pick<
-            NetworkInformationConfig,
-            'cfOrigin' | 'estimatedServerTime' | 'estimatedHeaderFraction'
-        >
-    >,
-    { delay, eventTarget, fetch }:
-        & Required<Pick<NetworkInformationServices, 'fetch'>>
-        & { delay: (ms: number) => Promise<void>; eventTarget: EventTarget },
-    uid: string,
-    measurementSize: number,
-    index: number,
-): Promise<NetworkMeasurement | null> => {
-    try {
-        const latencyResult = await _measureLatency(
-            { cfOrigin, estimatedHeaderFraction, estimatedServerTime },
-            { fetch },
-            uid,
-            index,
-        );
-        if (!latencyResult) return null;
-
-        await delay(50);
-
-        const downloadResult = await _measureDownload(
-            { cfOrigin, estimatedHeaderFraction, estimatedServerTime },
-            { fetch },
-            uid,
-            measurementSize,
-            index,
-        );
-        if (!downloadResult) return null;
-
-        const measurement = {
-            rtt: latencyResult.ping,
-            downlink: downloadResult.mbps,
-            measurementSize,
-            duration: downloadResult.networkTime,
-            realDuration: downloadResult.totalTime,
-            timestamp: Date.now(),
-        };
-        _dispatchNetworkEvent(eventTarget, 'measurement', measurement);
-        return measurement;
-    } catch {
-        return null;
-    }
-};
-
-/**
  * Network Information Api implementation providing real-time network measurement
  * with configurable classification tables
  *
@@ -325,7 +89,7 @@ export function createNetworkInformation(
     services: NetworkInformationServices = {},
 ): NetworkInformationLike {
     // Configuration
-    const cfOrigin = options.cfOrigin ?? 'https://speed.cloudflare.com';
+    const origin = options.origin ?? 'https://speed.cloudflare.com';
     const estimatedServerTime = options.estimatedServerTime ?? 10;
     const estimatedHeaderFraction = options.estimatedHeaderFraction ?? 0.005;
     const measurementCount = options.measurementCount ?? 2;
@@ -367,6 +131,203 @@ export function createNetworkInformation(
     };
 
     /**
+     * Dispatch a network change event
+     * @param type Event type
+     * @param data Event data
+     */
+    const dispatchNetworkEvent = (
+        eventType: string,
+        data: NetworkChangeEventDetail = {},
+    ): void => {
+        eventTarget.dispatchEvent(new CustomEvent(eventType, { detail: data }));
+    };
+
+    /**
+     * Check if measurement can be performed
+     */
+    const canPerformMeasurement = (): boolean => {
+        return !measuring &&
+            Date.now() - lastMeasurement > measurementInterval;
+    };
+
+    /**
+     * Create measurement URL for given parameters
+     */
+    const createMeasurementUrl = (
+        uid: string,
+        bytes: number,
+        index: number,
+    ): string => {
+        return `${origin}/__down?measId=${uid}&bytes=${bytes}&i=${index}`;
+    };
+
+    /**
+     * Extract server processing time from response headers
+     * @param res Fetch response object
+     * @returns Server time in milliseconds or null
+     */
+    const getServerTimeFromResponse = (res: Response): number | null => {
+        const serverTiming = res.headers.get('server-timing');
+        if (serverTiming) {
+            const match = serverTiming.match(/.*dur=([0-9.]+)/);
+            if (match) return +match[1];
+        }
+        return null;
+    };
+
+    /**
+     * Build timing information from fetch response
+     * @param res Fetch response object
+     * @returns Timing data or null if unavailable
+     */
+    const buildTiming = (
+        res: Response,
+        startTime?: number,
+        endTime?: number,
+    ): {
+        ping: number;
+        bps: number;
+        duration: number;
+        perf?: PerformanceResourceTiming;
+    } | null => {
+        const perf = performance.getEntriesByType('resource')
+            .find((p) => p.name === res.url) as PerformanceResourceTiming;
+
+        let url: URL;
+        let numBytes: number;
+        try {
+            url = new URL(res.url);
+            numBytes = parseInt(url.searchParams.get('bytes') || '0', 10);
+        } catch {
+            numBytes = 0;
+        }
+        const serverTime = getServerTimeFromResponse(res) ||
+            estimatedServerTime;
+
+        let ping: number;
+        let networkDuration: number;
+        let transferSize: number;
+
+        if (perf) {
+            const ttfb = perf.responseStart - perf.requestStart;
+            const payloadDownloadTime = perf.responseEnd - perf.responseStart;
+
+            ping = Math.max(0.01, ttfb - serverTime);
+            networkDuration = ping + payloadDownloadTime;
+            transferSize = perf.transferSize ||
+                (numBytes * (1 + estimatedHeaderFraction));
+        } else if (startTime !== undefined && endTime !== undefined) {
+            const totalDuration = endTime - startTime;
+            networkDuration = Math.max(1, totalDuration - serverTime);
+
+            ping = numBytes === 0
+                ? Math.max(1, networkDuration * 0.9)
+                : Math.min(networkDuration * 0.3, 200);
+
+            transferSize = numBytes * (1 + estimatedHeaderFraction);
+        } else {
+            return null;
+        }
+
+        const bits = 8 * transferSize;
+        const downloadTime = numBytes === 0
+            ? 0
+            : Math.max(1, networkDuration - ping);
+        const bps = numBytes === 0 ? 0 : bits / (downloadTime / 1_000);
+
+        return {
+            ping,
+            bps,
+            duration: networkDuration,
+            perf: perf || undefined,
+        };
+    };
+
+    /**
+     * Perform latency measurement
+     */
+    const measureLatency = async (
+        uid: string,
+        index: number,
+    ): Promise<{ ping: number } | null> => {
+        const startTime = performance.now();
+        const response = await fetch(
+            createMeasurementUrl(uid, 0, index),
+        );
+        await response.text();
+        const endTime = performance.now();
+
+        const timing = buildTiming(response, startTime, endTime);
+        return timing ? { ping: timing.ping } : null;
+    };
+
+    /**
+     * Perform download measurement
+     */
+    const measureDownload = async (
+        uid: string,
+        measurementSize: number,
+        index: number,
+    ): Promise<{ mbps: number; networkTime: number; totalTime: number } | null> => {
+        const startTime = performance.now();
+        const response = await fetch(
+            createMeasurementUrl(uid, measurementSize, index),
+        );
+        await response.text();
+        const endTime = performance.now();
+        const totalTime = endTime - startTime;
+
+        const serverTime = getServerTimeFromResponse(response) ||
+            estimatedServerTime;
+        const networkTime = Math.max(1, totalTime - serverTime);
+        const bits = 8 * (measurementSize * (1 + estimatedHeaderFraction));
+        const bps = bits / (networkTime / 1_000);
+        const mbps = bps / 1_000_000;
+
+        return { mbps, networkTime, totalTime };
+    };
+
+    /**
+     * Perform a single measurement
+     * @returns A network measurement
+     */
+    const performSingleMeasurement = async (
+        uid: string,
+        measurementSize: number,
+        index: number,
+    ): Promise<NetworkMeasurement | null> => {
+        try {
+            const latencyResult = await measureLatency(
+                uid,
+                index,
+            );
+            if (!latencyResult) return null;
+
+            await delay(50);
+
+            const downloadResult = await measureDownload(
+                uid,
+                measurementSize,
+                index,
+            );
+            if (!downloadResult) return null;
+
+            const measurement = {
+                rtt: latencyResult.ping,
+                downlink: downloadResult.mbps,
+                measurementSize,
+                duration: downloadResult.networkTime,
+                realDuration: downloadResult.totalTime,
+                timestamp: Date.now(),
+            };
+            dispatchNetworkEvent('measurement', measurement);
+            return measurement;
+        } catch {
+            return null;
+        }
+    };
+
+    /**
      * Measure network speed using multiple test sizes
      */
     const measureNetworkSpeed = async (): Promise<NetworkMeasurement[]> => {
@@ -377,9 +338,7 @@ export function createNetworkInformation(
             const measurementSize = baseMeasurementSize *
                 Math.pow(measurementSizeMultiplier, i);
 
-            const measurement = await _performSingleMeasurement(
-                { cfOrigin, estimatedHeaderFraction, estimatedServerTime },
-                { delay, eventTarget, fetch },
+            const measurement = await performSingleMeasurement(
                 uid,
                 measurementSize,
                 i,
@@ -424,7 +383,7 @@ export function createNetworkInformation(
         );
 
         if (prevEffectiveType !== effectiveType || !isPreliminary) {
-            _dispatchNetworkEvent(eventTarget, 'change', {
+            dispatchNetworkEvent('change', {
                 downlink,
                 uplink,
                 rtt,
@@ -479,13 +438,7 @@ export function createNetworkInformation(
      */
     const startPeriodicMeasurements = (): void => {
         periodicTimer = setInterval(() => {
-            if (
-                _canPerformMeasurement(
-                    measuring,
-                    lastMeasurement,
-                    measurementInterval,
-                )
-            ) {
+            if (canPerformMeasurement()) {
                 performMeasurement();
             }
         }, periodicInterval);

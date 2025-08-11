@@ -96,7 +96,7 @@ DevTools throttling is applied synthetically, but this polyfill uses the **Perfo
 ```typescript
 interface NetworkInformationConfig {
     classificationTable: ConnectionClassification[]; // Required
-    cfOrigin?: string; // Default: 'https://speed.cloudflare.com'
+    origin?: string; // Default: 'https://speed.cloudflare.com'
     measurementCount?: number; // Default: 2
     baseMeasurementSize?: number; // Default: 100000 bytes
     measurementSizeMultiplier?: number; // Default: 2
