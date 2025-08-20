@@ -2,6 +2,7 @@
 
 [![JSR](https://jsr.io/badges/@esroyo/network-information-api-polyfill)](https://jsr.io/@esroyo/network-information-api-polyfill)
 [![JSR Score](https://jsr.io/badges/@esroyo/network-information-api-polyfill/score)](https://jsr.io/@esroyo/network-information-api-polyfill)
+[![ci](https://github.com/esroyo/network-information-api-polyfill/actions/workflows/ci.yml/badge.svg)](https://github.com/esroyo/network-information-api-polyfill/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/esroyo/network-information-api-polyfill/graph/badge.svg?token=YO7XY0TDX5)](https://codecov.io/gh/esroyo/network-information-api-polyfill)
 
 A polyfill for the [W3C Network Information API](https://developer.mozilla.org/en-US/docs/Web/API/Network_Information_API) that provides real-time network connection information when the native API is not available.
